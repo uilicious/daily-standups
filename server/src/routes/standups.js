@@ -34,16 +34,10 @@ export default async function standupRoutes(fastify, options) {
     const user = await checkAuth(request, reply);
     if (!user) return;
 
-    const { team_id, date, yesterday, today, blockers } = request.body || {};
+    const { team_id, date, answers, yesterday, today, blockers } = request.body || {};
 
     if (!team_id) {
       return reply.code(400).send({ error: 'team_id is required' });
-    }
-    if (!yesterday || !yesterday.trim()) {
-      return reply.code(400).send({ error: 'Question 1: What did you do yesterday? is required' });
-    }
-    if (!today || !today.trim()) {
-      return reply.code(400).send({ error: 'Question 2: What are you working on today? is required' });
     }
 
     const team = await getTeamById(Number(team_id));
@@ -59,13 +53,35 @@ export default async function standupRoutes(fastify, options) {
 
     const submissionDate = date || new Date().toISOString().split('T')[0];
 
+    // Validate required questions
+    if (Array.isArray(answers)) {
+      const teamQuestions = team.questions || [];
+      for (const q of teamQuestions) {
+        if (q.is_required) {
+          const ans = answers.find(a => Number(a.question_id) === Number(q.id));
+          if (!ans || !ans.answer || !ans.answer.trim()) {
+            return reply.code(400).send({ error: `Please answer required question: "${q.text}"` });
+          }
+        }
+      }
+    } else {
+      // Fallback legacy validation
+      if (!yesterday || !yesterday.trim()) {
+        return reply.code(400).send({ error: 'Question 1: What did you do yesterday? is required' });
+      }
+      if (!today || !today.trim()) {
+        return reply.code(400).send({ error: 'Question 2: What are you working on today? is required' });
+      }
+    }
+
     const saved = await saveStandup({
       user_id: user.id,
       team_id: team.id,
       date: submissionDate,
-      yesterday: yesterday.trim(),
-      today: today.trim(),
-      blockers: blockers ? blockers.trim() : ''
+      answers,
+      yesterday,
+      today,
+      blockers
     });
 
     return {

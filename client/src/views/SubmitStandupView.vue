@@ -5,7 +5,7 @@
       <div class="mb-8">
         <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Daily Standup Update</h1>
         <p class="text-sm text-slate-500 mt-1">
-          Share your progress, plans, and any blockers with your team before the morning standup.
+          Share your daily progress, plans, and any blockers with your team.
         </p>
       </div>
 
@@ -38,7 +38,7 @@
             <div v-if="availableTeams.length > 0">
               <select
                 v-model="selectedTeamId"
-                @change="checkExistingSubmission"
+                @change="onTeamChanged"
                 class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
               >
                 <option v-for="t in availableTeams" :key="t.id" :value="t.id">
@@ -70,52 +70,46 @@
 
         <hr class="border-slate-100" />
 
-        <!-- Question 1: What did you do yesterday? -->
-        <div>
-          <label class="block text-sm font-semibold text-slate-900 mb-1.5">
-            1. What did you do yesterday (or the previous working day)? <span class="text-rose-500">*</span>
-          </label>
-          <p class="text-xs text-slate-500 mb-2">Key tasks completed, PRs merged, bugs resolved, or discussions held.</p>
-          <textarea
-            v-model="form.yesterday"
-            required
-            rows="3"
-            placeholder="e.g. Completed user profile API and reviewed pull request #38..."
-            class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-          ></textarea>
+        <!-- Dynamic Questions for Selected Team -->
+        <div v-if="loadingQuestions" class="py-12 text-center text-slate-400 text-sm">
+          <Loader2 class="w-6 h-6 animate-spin mx-auto text-indigo-500 mb-2" />
+          <span>Loading questions for team...</span>
         </div>
 
-        <!-- Question 2: What are you working on today? -->
-        <div>
-          <label class="block text-sm font-semibold text-slate-900 mb-1.5">
-            2. What are you working on today? <span class="text-rose-500">*</span>
-          </label>
-          <p class="text-xs text-slate-500 mb-2">Primary goals and priorities for today's focus.</p>
-          <textarea
-            v-model="form.today"
-            required
-            rows="3"
-            placeholder="e.g. Implementing SQLite standup models and writing unit tests..."
-            class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-          ></textarea>
+        <div v-else-if="teamQuestions.length > 0" class="space-y-6">
+          <div
+            v-for="(q, idx) in teamQuestions"
+            :key="q.id"
+            class="space-y-1.5"
+          >
+            <div class="flex items-center justify-between">
+              <label class="block text-sm font-semibold text-slate-900 leading-snug">
+                {{ idx + 1 }}. {{ q.text }}
+                <span v-if="q.is_required" class="text-rose-500 ml-0.5">*</span>
+              </label>
+              <span
+                v-if="!q.is_required"
+                class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md"
+              >
+                Optional
+              </span>
+            </div>
+            <textarea
+              v-model="answers[q.id]"
+              :required="q.is_required"
+              rows="3"
+              :placeholder="getPlaceholder(q, idx)"
+              class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+            ></textarea>
+          </div>
         </div>
 
-        <!-- Question 3: Blockers & Help Needed -->
-        <div>
-          <label class="block text-sm font-semibold text-slate-900 mb-1.5">
-            3. Any blockers? And who do you need help from?
-          </label>
-          <p class="text-xs text-slate-500 mb-2">Dependencies, permissions needed, or code reviews waiting on a specific teammate. (Leave blank or write "None" if all clear).</p>
-          <textarea
-            v-model="form.blockers"
-            rows="2"
-            placeholder="e.g. Waiting on API credentials from John, or write 'None'"
-            class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-          ></textarea>
+        <div v-else class="p-6 bg-slate-50 rounded-xl text-center text-sm text-slate-500">
+          No questions configured for this team. Please contact an admin.
         </div>
 
         <!-- Submit Buttons -->
-        <div class="flex items-center justify-end space-x-3 pt-4">
+        <div class="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
           <button
             type="button"
             @click="cancel"
@@ -125,7 +119,7 @@
           </button>
           <button
             type="submit"
-            :disabled="submitting || availableTeams.length === 0"
+            :disabled="submitting || availableTeams.length === 0 || teamQuestions.length === 0"
             class="inline-flex items-center space-x-2 px-6 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition shadow-sm shadow-indigo-100"
           >
             <Loader2 v-if="submitting" class="w-4 h-4 animate-spin" />
@@ -145,17 +139,15 @@ import { CheckCircle2, AlertCircle, Info, Loader2 } from '@lucide/vue';
 
 const route = useRoute();
 const router = useRouter();
-const { user, isAdmin } = useAuth();
+const { user } = useAuth();
 
 const allTeams = ref([]);
 const selectedTeamId = ref(null);
 const standupDate = ref(new Date().toISOString().split('T')[0]);
 
-const form = ref({
-  yesterday: '',
-  today: '',
-  blockers: ''
-});
+const teamQuestions = ref([]);
+const answers = ref({}); // { [questionId]: string }
+const loadingQuestions = ref(false);
 
 const isExistingSubmission = ref(false);
 const submitting = ref(false);
@@ -166,6 +158,20 @@ const errorMessage = ref('');
 const availableTeams = computed(() => {
   return user.value?.teams || [];
 });
+
+function getPlaceholder(question, idx) {
+  const text = (question.text || '').toLowerCase();
+  if (text.includes('yesterday') || idx === 0) {
+    return 'e.g. Completed user profile API, reviewed PR #42, tested DB migrations...';
+  }
+  if (text.includes('today') || idx === 1) {
+    return 'e.g. Building custom team questions UI, refining standup cards...';
+  }
+  if (text.includes('blocker') || text.includes('help')) {
+    return 'e.g. Waiting on API credentials from DevOps, or write "None"...';
+  }
+  return 'Write your answer here...';
+}
 
 async function loadTeams() {
   try {
@@ -185,11 +191,43 @@ async function loadTeams() {
         standupDate.value = route.query.date;
       }
 
-      await checkExistingSubmission();
+      await loadQuestionsAndSubmission();
     }
   } catch (err) {
     console.error('Failed to load teams', err);
   }
+}
+
+async function onTeamChanged() {
+  await loadQuestionsAndSubmission();
+}
+
+async function loadQuestionsAndSubmission() {
+  if (!selectedTeamId.value) return;
+
+  loadingQuestions.value = true;
+  try {
+    const res = await fetch(`/api/teams/${selectedTeamId.value}/questions`, {
+      credentials: 'include'
+    });
+    if (res.ok) {
+      const data = await res.json();
+      teamQuestions.value = data.questions || [];
+      
+      // Initialize answer fields
+      const newAnswers = {};
+      for (const q of teamQuestions.value) {
+        newAnswers[q.id] = answers.value[q.id] || '';
+      }
+      answers.value = newAnswers;
+    }
+  } catch (err) {
+    console.error('Failed to fetch team questions', err);
+  } finally {
+    loadingQuestions.value = false;
+  }
+
+  await checkExistingSubmission();
 }
 
 async function checkExistingSubmission() {
@@ -204,12 +242,27 @@ async function checkExistingSubmission() {
       const existing = (data.standups || []).find(s => s.user_id === user.value?.id);
       if (existing) {
         isExistingSubmission.value = true;
-        form.value.yesterday = existing.yesterday;
-        form.value.today = existing.today;
-        form.value.blockers = existing.blockers || '';
+        
+        if (Array.isArray(existing.answers) && existing.answers.length > 0) {
+          for (const a of existing.answers) {
+            if (a.question_id) {
+              answers.value[a.question_id] = a.answer;
+            }
+          }
+        } else {
+          // Fallback if legacy properties exist
+          if (teamQuestions.value[0] && existing.yesterday) {
+            answers.value[teamQuestions.value[0].id] = existing.yesterday;
+          }
+          if (teamQuestions.value[1] && existing.today) {
+            answers.value[teamQuestions.value[1].id] = existing.today;
+          }
+          if (teamQuestions.value[2] && existing.blockers) {
+            answers.value[teamQuestions.value[2].id] = existing.blockers;
+          }
+        }
       } else {
         isExistingSubmission.value = false;
-        // Don't wipe fields if user just started typing, only if it was matching previous
       }
     }
   } catch (err) {
@@ -220,9 +273,24 @@ async function checkExistingSubmission() {
 async function handleSubmit() {
   errorMessage.value = '';
   successMessage.value = '';
+
+  // Validate required questions
+  for (const q of teamQuestions.value) {
+    if (q.is_required && (!answers.value[q.id] || !answers.value[q.id].trim())) {
+      errorMessage.value = `Question "${q.text}" is required.`;
+      return;
+    }
+  }
+
   submitting.value = true;
 
   try {
+    const formattedAnswers = teamQuestions.value.map(q => ({
+      question_id: q.id,
+      question_text: q.text,
+      answer: (answers.value[q.id] || '').trim()
+    }));
+
     const res = await fetch('/api/standups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -230,9 +298,7 @@ async function handleSubmit() {
       body: JSON.stringify({
         team_id: selectedTeamId.value,
         date: standupDate.value,
-        yesterday: form.value.yesterday,
-        today: form.value.today,
-        blockers: form.value.blockers
+        answers: formattedAnswers
       })
     });
 

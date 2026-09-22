@@ -8,6 +8,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const dbDir = path.resolve(__dirname, '../../data');
 
+export const DEFAULT_STANDUP_QUESTIONS = [
+  { text: 'What did you do yesterday (or the previous working day)?', is_required: true },
+  { text: 'What are you working on today?', is_required: true },
+  { text: 'Any blockers? And who do you need help from?', is_required: false }
+];
+
 function getDatabaseConfig() {
   const dbClient = (process.env.DB_CLIENT || '').toLowerCase();
   const databaseUrl = process.env.DATABASE_URL || '';
@@ -108,7 +114,24 @@ export async function initDatabase() {
     });
   }
 
-  // 4. standups table
+  // 4. questions table (custom questions per team)
+  const hasQuestions = await db.schema.hasTable('questions');
+  if (!hasQuestions) {
+    await db.schema.createTable('questions', (table) => {
+      table.increments('id').primary();
+      table.integer('team_id').unsigned().notNullable()
+        .references('id').inTable('teams').onDelete('CASCADE');
+      table.text('text').notNullable();
+      table.integer('order_index').notNullable().defaultTo(0);
+      table.boolean('is_required').notNullable().defaultTo(true);
+      table.timestamp('created_at').defaultTo(db.fn.now());
+      table.timestamp('updated_at').defaultTo(db.fn.now());
+
+      table.index(['team_id', 'order_index']);
+    });
+  }
+
+  // 5. standups table
   const hasStandups = await db.schema.hasTable('standups');
   if (!hasStandups) {
     await db.schema.createTable('standups', (table) => {
@@ -118,9 +141,6 @@ export async function initDatabase() {
       table.integer('team_id').unsigned().notNullable()
         .references('id').inTable('teams').onDelete('CASCADE');
       table.string('date', 10).notNullable(); // YYYY-MM-DD
-      table.text('yesterday').notNullable();
-      table.text('today').notNullable();
-      table.text('blockers').nullable();
       table.timestamp('created_at').defaultTo(db.fn.now());
       table.timestamp('updated_at').defaultTo(db.fn.now());
 
@@ -130,8 +150,104 @@ export async function initDatabase() {
     });
   }
 
+  // 6. standup_answers table (dynamic responses to questions)
+  const hasStandupAnswers = await db.schema.hasTable('standup_answers');
+  if (!hasStandupAnswers) {
+    await db.schema.createTable('standup_answers', (table) => {
+      table.increments('id').primary();
+      table.integer('standup_id').unsigned().notNullable()
+        .references('id').inTable('standups').onDelete('CASCADE');
+      table.integer('question_id').unsigned().nullable()
+        .references('id').inTable('questions').onDelete('SET NULL');
+      table.text('question_text').notNullable();
+      table.text('answer').notNullable().defaultTo('');
+      table.timestamp('created_at').defaultTo(db.fn.now());
+      table.timestamp('updated_at').defaultTo(db.fn.now());
+
+      table.index(['standup_id']);
+    });
+  }
+
   await seedFromExternalFile();
+  await ensureQuestionsForExistingTeams();
+  await migrateLegacyStandupAnswers();
   await syncAdminPasswordFromEnv();
+}
+
+export async function ensureQuestionsForExistingTeams() {
+  const teams = await db('teams').select('id');
+  for (const team of teams) {
+    await seedQuestionsForTeam(team.id);
+  }
+}
+
+export async function seedQuestionsForTeam(teamId) {
+  const countRow = await db('questions').where('team_id', teamId).count('id as count').first();
+  if (Number(countRow?.count || 0) === 0) {
+    for (let i = 0; i < DEFAULT_STANDUP_QUESTIONS.length; i++) {
+      const q = DEFAULT_STANDUP_QUESTIONS[i];
+      await db('questions').insert({
+        team_id: teamId,
+        text: q.text,
+        order_index: i,
+        is_required: q.is_required
+      });
+    }
+  }
+}
+
+async function migrateLegacyStandupAnswers() {
+  const hasYesterday = await db.schema.hasColumn('standups', 'yesterday');
+  if (!hasYesterday) return;
+
+  const existingStandups = await db('standups').select('*');
+  for (const s of existingStandups) {
+    const existingCount = await db('standup_answers').where('standup_id', s.id).count('id as count').first();
+    if (Number(existingCount?.count || 0) > 0) continue;
+
+    const teamQuestions = await db('questions')
+      .where('team_id', s.team_id)
+      .orderBy('order_index', 'asc');
+
+    const q1 = teamQuestions[0];
+    const q2 = teamQuestions[1];
+    const q3 = teamQuestions[2];
+
+    if (s.yesterday) {
+      await db('standup_answers').insert({
+        standup_id: s.id,
+        question_id: q1?.id || null,
+        question_text: q1?.text || DEFAULT_STANDUP_QUESTIONS[0].text,
+        answer: s.yesterday
+      });
+    }
+    if (s.today) {
+      await db('standup_answers').insert({
+        standup_id: s.id,
+        question_id: q2?.id || null,
+        question_text: q2?.text || DEFAULT_STANDUP_QUESTIONS[1].text,
+        answer: s.today
+      });
+    }
+    if (s.blockers) {
+      await db('standup_answers').insert({
+        standup_id: s.id,
+        question_id: q3?.id || null,
+        question_text: q3?.text || DEFAULT_STANDUP_QUESTIONS[2].text,
+        answer: s.blockers
+      });
+    }
+  }
+
+  try {
+    await db.schema.alterTable('standups', (table) => {
+      table.dropColumn('yesterday');
+      table.dropColumn('today');
+      table.dropColumn('blockers');
+    });
+  } catch (err) {
+    // legacy columns already dropped
+  }
 }
 
 export async function syncAdminPasswordFromEnv() {
@@ -213,11 +329,14 @@ export async function seedFromExternalFile() {
 
   if (teamCount === 0 && Array.isArray(seedData.teams)) {
     for (const team of seedData.teams) {
-      await db('teams').insert({
+      const inserted = await db('teams').insert({
         name: team.name,
         slug: team.slug,
         description: team.description || ''
       });
+      let teamId = Array.isArray(inserted) ? inserted[0] : inserted;
+      if (typeof teamId === 'object' && teamId !== null) teamId = teamId.id || teamId;
+      await seedQuestionsForTeam(teamId);
     }
     console.log(`[Seed] Seeded ${seedData.teams.length} teams from ${path.basename(seedFilePath)}`);
   }

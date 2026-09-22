@@ -1,4 +1,4 @@
-import { getTeamById, getTeamBySlug, getStandupsByTeamAndDate, getUserById } from '../db/queries.js';
+import { getTeamById, getTeamBySlug, getStandupsByTeamAndDate, getUserById, getQuestionsByTeamId } from '../db/queries.js';
 
 export default async function teamRoutes(fastify, options) {
   // Helper to ensure user is logged in
@@ -48,6 +48,30 @@ export default async function teamRoutes(fastify, options) {
     }
 
     return { team };
+  });
+
+  // Get questions for team (only if member)
+  fastify.get('/:idOrSlug/questions', async (request, reply) => {
+    const user = await getAuthenticatedUser(request, reply);
+    if (!user) return;
+
+    const { idOrSlug } = request.params;
+    let team = isNaN(idOrSlug) ? await getTeamBySlug(idOrSlug) : await getTeamById(Number(idOrSlug));
+    if (!team) {
+      team = await getTeamBySlug(idOrSlug);
+    }
+
+    if (!team) {
+      return reply.code(404).send({ error: 'Team not found' });
+    }
+
+    const isMember = (user.teams || []).some(t => t.id === team.id);
+    if (!isMember) {
+      return reply.code(403).send({ error: 'Access denied. You do not belong to this team.' });
+    }
+
+    const questions = await getQuestionsByTeamId(team.id);
+    return { team, questions };
   });
 
   // Get standups for team on date (only if member)

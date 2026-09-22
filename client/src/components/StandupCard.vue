@@ -37,8 +37,32 @@
       </div>
     </div>
 
-    <!-- 3 Questions Grid -->
-    <div class="space-y-4 pt-1">
+    <!-- Dynamic Questions & Answers -->
+    <div v-if="standup.answers && standup.answers.length > 0" class="space-y-3.5 pt-1">
+      <div
+        v-for="(ans, idx) in standup.answers"
+        :key="ans.id || idx"
+        class="rounded-xl p-3.5 border transition-colors"
+        :class="getAnswerCardClass(ans)"
+      >
+        <div
+          class="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider mb-1.5"
+          :class="getQuestionHeaderClass(ans)"
+        >
+          <component :is="getQuestionIcon(ans, idx)" class="w-3.5 h-3.5" />
+          <span>{{ idx + 1 }}. {{ ans.question_text }}</span>
+        </div>
+        <p
+          class="text-sm whitespace-pre-line leading-relaxed pl-5"
+          :class="ans.answer && ans.answer.trim() ? 'text-slate-800' : 'text-slate-400 italic'"
+        >
+          {{ ans.answer && ans.answer.trim() ? ans.answer : '(No response provided)' }}
+        </p>
+      </div>
+    </div>
+
+    <!-- Fallback for legacy 3 Questions Grid -->
+    <div v-else class="space-y-4 pt-1">
       <!-- Question 1: Yesterday -->
       <div class="rounded-lg bg-slate-50/70 p-3.5 border border-slate-100">
         <div class="flex items-center space-x-2 text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
@@ -60,16 +84,16 @@
       <!-- Question 3: Blockers & Help Needed -->
       <div
         class="rounded-lg p-3.5 border transition-colors"
-        :class="hasBlockers ? 'bg-amber-50/60 border-amber-200 text-amber-950' : 'bg-slate-50/70 border-slate-100'"
+        :class="hasLegacyBlockers ? 'bg-amber-50/60 border-amber-200 text-amber-950' : 'bg-slate-50/70 border-slate-100'"
       >
-        <div class="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider mb-1.5" :class="hasBlockers ? 'text-amber-800' : 'text-slate-600'">
-          <AlertTriangle v-if="hasBlockers" class="w-3.5 h-3.5 text-amber-600" />
+        <div class="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider mb-1.5" :class="hasLegacyBlockers ? 'text-amber-800' : 'text-slate-600'">
+          <AlertTriangle v-if="hasLegacyBlockers" class="w-3.5 h-3.5 text-amber-600" />
           <ShieldCheck v-else class="w-3.5 h-3.5 text-emerald-600" />
           <span>3. Any blockers? And who do you need help from?</span>
         </div>
         <p
           class="text-sm whitespace-pre-line leading-relaxed pl-5"
-          :class="hasBlockers ? 'text-amber-900 font-medium' : 'text-slate-500 italic'"
+          :class="hasLegacyBlockers ? 'text-amber-900 font-medium' : 'text-slate-500 italic'"
         >
           {{ standup.blockers && standup.blockers.trim() ? standup.blockers : 'None reported. All clear!' }}
         </p>
@@ -80,7 +104,7 @@
 
 <script setup>
 import { computed } from 'vue';
-import { History, CheckCircle2, AlertTriangle, ShieldCheck } from '@lucide/vue';
+import { History, CheckCircle2, AlertTriangle, ShieldCheck, MessageSquare } from '@lucide/vue';
 import { useAuth } from '@/composables/useAuth.js';
 
 const props = defineProps({
@@ -113,10 +137,50 @@ const formattedTime = computed(() => {
   }
 });
 
-const hasBlockers = computed(() => {
+function isBlockerQuestion(text) {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  return lower.includes('blocker') || lower.includes('help from') || lower.includes('impediment');
+}
+
+function hasActiveBlocker(answer) {
+  if (!answer) return false;
+  const b = answer.trim().toLowerCase();
+  if (!b) return false;
+  if (['none', 'nil', 'n/a', 'no', 'none!', 'no blockers', 'all clear', 'no blocker', 'nope'].includes(b)) {
+    return false;
+  }
+  return true;
+}
+
+function getAnswerCardClass(ans) {
+  if (isBlockerQuestion(ans.question_text)) {
+    return hasActiveBlocker(ans.answer)
+      ? 'bg-amber-50/70 border-amber-200'
+      : 'bg-emerald-50/40 border-emerald-100';
+  }
+  return 'bg-slate-50/70 border-slate-100';
+}
+
+function getQuestionHeaderClass(ans) {
+  if (isBlockerQuestion(ans.question_text)) {
+    return hasActiveBlocker(ans.answer) ? 'text-amber-800' : 'text-emerald-700';
+  }
+  return 'text-slate-600';
+}
+
+function getQuestionIcon(ans, idx) {
+  if (isBlockerQuestion(ans.question_text)) {
+    return hasActiveBlocker(ans.answer) ? AlertTriangle : ShieldCheck;
+  }
+  if (idx === 0) return History;
+  if (idx === 1) return CheckCircle2;
+  return MessageSquare;
+}
+
+const hasLegacyBlockers = computed(() => {
   const b = props.standup.blockers?.trim()?.toLowerCase();
   if (!b) return false;
-  // If explicitly states "none", "no blockers", "all good", "nil", "n/a", etc.
   if (['none', 'nil', 'n/a', 'no', 'none!', 'no blockers', 'all clear', 'no blocker'].includes(b)) {
     return false;
   }

@@ -5,10 +5,17 @@ import {
   updateUser,
   deleteUser,
   getAllTeams,
+  getTeamById,
   createTeam,
   updateTeam,
   deleteTeam,
-  getUserByEmail
+  getUserByEmail,
+  getQuestionsByTeamId,
+  createQuestion,
+  updateQuestion,
+  deleteQuestion,
+  setTeamQuestions,
+  resetTeamQuestionsToDefaults
 } from '../db/queries.js';
 
 export default async function adminRoutes(fastify, options) {
@@ -169,5 +176,93 @@ export default async function adminRoutes(fastify, options) {
 
     await deleteTeam(teamId);
     return { ok: true, message: 'Team deleted' };
+  });
+
+  // --- TEAM QUESTIONS MANAGEMENT ---
+
+  // Get questions for a team
+  fastify.get('/teams/:id/questions', async (request, reply) => {
+    const { id } = request.params;
+    const teamId = Number(id);
+
+    const team = await getTeamById(teamId);
+    if (!team) {
+      return reply.code(404).send({ error: 'Team not found' });
+    }
+
+    const questions = await getQuestionsByTeamId(teamId);
+    return { questions };
+  });
+
+  // Add a new question to a team
+  fastify.post('/teams/:id/questions', async (request, reply) => {
+    const { id } = request.params;
+    const teamId = Number(id);
+    const { text, is_required = true, order_index } = request.body || {};
+
+    if (!text || !text.trim()) {
+      return reply.code(400).send({ error: 'Question text is required' });
+    }
+
+    const team = await getTeamById(teamId);
+    if (!team) {
+      return reply.code(404).send({ error: 'Team not found' });
+    }
+
+    const question = await createQuestion(teamId, { text, is_required, order_index });
+    return { ok: true, question };
+  });
+
+  // Update a single question
+  fastify.put('/teams/:id/questions/:questionId', async (request, reply) => {
+    const { questionId } = request.params;
+    const { text, is_required, order_index } = request.body || {};
+
+    const updated = await updateQuestion(Number(questionId), { text, is_required, order_index });
+    if (!updated) {
+      return reply.code(404).send({ error: 'Question not found' });
+    }
+
+    return { ok: true, question: updated };
+  });
+
+  // Delete a single question
+  fastify.delete('/teams/:id/questions/:questionId', async (request, reply) => {
+    const { questionId } = request.params;
+    await deleteQuestion(Number(questionId));
+    return { ok: true, message: 'Question deleted' };
+  });
+
+  // Batch update / reorder all questions for a team
+  fastify.put('/teams/:id/questions', async (request, reply) => {
+    const { id } = request.params;
+    const teamId = Number(id);
+    const { questions } = request.body || {};
+
+    if (!Array.isArray(questions)) {
+      return reply.code(400).send({ error: 'questions must be an array' });
+    }
+
+    const team = await getTeamById(teamId);
+    if (!team) {
+      return reply.code(404).send({ error: 'Team not found' });
+    }
+
+    const updatedList = await setTeamQuestions(teamId, questions);
+    return { ok: true, questions: updatedList };
+  });
+
+  // Reset a team's questions to system defaults
+  fastify.post('/teams/:id/questions/reset', async (request, reply) => {
+    const { id } = request.params;
+    const teamId = Number(id);
+
+    const team = await getTeamById(teamId);
+    if (!team) {
+      return reply.code(404).send({ error: 'Team not found' });
+    }
+
+    const questions = await resetTeamQuestionsToDefaults(teamId);
+    return { ok: true, questions };
   });
 }

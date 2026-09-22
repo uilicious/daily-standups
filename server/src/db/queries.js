@@ -1,5 +1,9 @@
-import db from './index.js';
+import db, { seedQuestionsForTeam, DEFAULT_STANDUP_QUESTIONS } from './index.js';
 import { hashPassword } from '../utils/auth.js';
+
+// =============================================================================
+// USER QUERIES
+// =============================================================================
 
 export async function getUserById(id) {
   const user = await db('users')
@@ -126,6 +130,10 @@ export async function deleteUser(id) {
   return db('users').where('id', id).del();
 }
 
+// =============================================================================
+// TEAM QUERIES
+// =============================================================================
+
 export async function getAllTeams() {
   const teams = await db('teams as t')
     .leftJoin('user_teams as ut', 'ut.team_id', 't.id')
@@ -134,19 +142,28 @@ export async function getAllTeams() {
     .groupBy('t.id', 't.name', 't.slug', 't.description', 't.created_at')
     .orderBy('t.id', 'asc');
 
-  // Normalize member_count to integer
-  return teams.map(t => ({
-    ...t,
-    member_count: Number(t.member_count || 0)
-  }));
+  for (const t of teams) {
+    t.member_count = Number(t.member_count || 0);
+    t.questions = await getQuestionsByTeamId(t.id);
+  }
+
+  return teams;
 }
 
 export async function getTeamBySlug(slug) {
-  return db('teams').where('slug', slug).first();
+  const team = await db('teams').where('slug', slug).first();
+  if (team) {
+    team.questions = await getQuestionsByTeamId(team.id);
+  }
+  return team;
 }
 
 export async function getTeamById(id) {
-  return db('teams').where('id', id).first();
+  const team = await db('teams').where('id', id).first();
+  if (team) {
+    team.questions = await getQuestionsByTeamId(team.id);
+  }
+  return team;
 }
 
 export async function createTeam({ name, slug, description = '' }) {
@@ -161,6 +178,9 @@ export async function createTeam({ name, slug, description = '' }) {
   if (typeof teamId === 'object' && teamId !== null) {
     teamId = teamId.id || teamId;
   }
+
+  // Seed default 3 questions for new team
+  await seedQuestionsForTeam(teamId);
 
   return getTeamById(teamId);
 }
@@ -181,8 +201,155 @@ export async function deleteTeam(id) {
   return db('teams').where('id', id).del();
 }
 
+// =============================================================================
+// QUESTIONS QUERIES (Customizable per team)
+// =============================================================================
+
+export async function getQuestionsByTeamId(teamId) {
+  const questions = await db('questions')
+    .where('team_id', teamId)
+    .orderBy('order_index', 'asc')
+    .orderBy('id', 'asc');
+
+  return questions.map(q => ({
+    ...q,
+    is_required: Boolean(q.is_required)
+  }));
+}
+
+export async function getQuestionById(id) {
+  const question = await db('questions').where('id', id).first();
+  if (!question) return null;
+  return {
+    ...question,
+    is_required: Boolean(question.is_required)
+  };
+}
+
+export async function createQuestion(teamId, { text, is_required = true, order_index }) {
+  let index = order_index;
+  if (index === undefined || index === null) {
+    const maxOrder = await db('questions').where('team_id', teamId).max('order_index as max_index').first();
+    index = (maxOrder?.max_index ?? -1) + 1;
+  }
+
+  const result = await db('questions').insert({
+    team_id: teamId,
+    text: text.trim(),
+    is_required: Boolean(is_required),
+    order_index: index,
+    updated_at: db.fn.now()
+  });
+
+  let qId = Array.isArray(result) ? result[0] : result;
+  if (typeof qId === 'object' && qId !== null) qId = qId.id || qId;
+
+  return getQuestionById(qId);
+}
+
+export async function updateQuestion(id, { text, is_required, order_index }) {
+  const updates = { updated_at: db.fn.now() };
+  if (text !== undefined) updates.text = text.trim();
+  if (is_required !== undefined) updates.is_required = Boolean(is_required);
+  if (order_index !== undefined) updates.order_index = Number(order_index);
+
+  await db('questions').where('id', id).update(updates);
+  return getQuestionById(id);
+}
+
+export async function deleteQuestion(id) {
+  return db('questions').where('id', id).del();
+}
+
+export async function setTeamQuestions(teamId, questionsList) {
+  // Replace / update questions list atomically
+  const currentQuestions = await db('questions').where('team_id', teamId);
+  const currentIds = new Set(currentQuestions.map(q => q.id));
+  const keepIds = new Set();
+
+  for (let i = 0; i < questionsList.length; i++) {
+    const item = questionsList[i];
+    if (item.id && currentIds.has(item.id)) {
+      keepIds.add(item.id);
+      await db('questions').where('id', item.id).update({
+        text: item.text.trim(),
+        is_required: item.is_required !== undefined ? Boolean(item.is_required) : true,
+        order_index: i,
+        updated_at: db.fn.now()
+      });
+    } else {
+      const inserted = await db('questions').insert({
+        team_id: teamId,
+        text: item.text.trim(),
+        is_required: item.is_required !== undefined ? Boolean(item.is_required) : true,
+        order_index: i,
+        updated_at: db.fn.now()
+      });
+      let newId = Array.isArray(inserted) ? inserted[0] : inserted;
+      if (typeof newId === 'object' && newId !== null) newId = newId.id || newId;
+      keepIds.add(newId);
+    }
+  }
+
+  // Delete questions that were removed
+  for (const q of currentQuestions) {
+    if (!keepIds.has(q.id)) {
+      await db('questions').where('id', q.id).del();
+    }
+  }
+
+  return getQuestionsByTeamId(teamId);
+}
+
+export async function resetTeamQuestionsToDefaults(teamId) {
+  await db('questions').where('team_id', teamId).del();
+  for (let i = 0; i < DEFAULT_STANDUP_QUESTIONS.length; i++) {
+    const q = DEFAULT_STANDUP_QUESTIONS[i];
+    await db('questions').insert({
+      team_id: teamId,
+      text: q.text,
+      order_index: i,
+      is_required: q.is_required,
+      updated_at: db.fn.now()
+    });
+  }
+  return getQuestionsByTeamId(teamId);
+}
+
+// =============================================================================
+// STANDUP QUERIES
+// =============================================================================
+
+async function attachAnswersToStandups(standups) {
+  if (!standups || standups.length === 0) return standups;
+
+  const standupIds = standups.map(s => s.id);
+  const allAnswers = await db('standup_answers')
+    .whereIn('standup_id', standupIds)
+    .orderBy('id', 'asc');
+
+  const answersByStandup = {};
+  for (const ans of allAnswers) {
+    if (!answersByStandup[ans.standup_id]) {
+      answersByStandup[ans.standup_id] = [];
+    }
+    answersByStandup[ans.standup_id].push({
+      id: ans.id,
+      question_id: ans.question_id,
+      question_text: ans.question_text,
+      answer: ans.answer
+    });
+  }
+
+  for (const s of standups) {
+    s.answers = answersByStandup[s.id] || [];
+  }
+
+  return standups;
+}
+
 export async function getStandupsByTeamAndDate(teamId, date) {
-  return db('standups as s')
+  const standups = await db('standups as s')
     .join('users as u', 'u.id', 's.user_id')
     .where('s.team_id', teamId)
     .where('s.date', date)
@@ -191,9 +358,6 @@ export async function getStandupsByTeamAndDate(teamId, date) {
       's.user_id',
       's.team_id',
       's.date',
-      's.yesterday',
-      's.today',
-      's.blockers',
       's.created_at',
       's.updated_at',
       'u.name as user_name',
@@ -202,10 +366,12 @@ export async function getStandupsByTeamAndDate(teamId, date) {
       'u.role as user_role'
     )
     .orderBy('s.updated_at', 'desc');
+
+  return attachAnswersToStandups(standups);
 }
 
 export async function getTodayStandupsForUser(userId, date) {
-  return db('standups as s')
+  const standups = await db('standups as s')
     .join('teams as t', 't.id', 's.team_id')
     .where('s.user_id', userId)
     .where('s.date', date)
@@ -213,41 +379,91 @@ export async function getTodayStandupsForUser(userId, date) {
       's.id',
       's.team_id',
       's.date',
-      's.yesterday',
-      's.today',
-      's.blockers',
       's.created_at',
       's.updated_at',
       't.name as team_name',
       't.slug as team_slug'
     );
+
+  return attachAnswersToStandups(standups);
 }
 
-export async function saveStandup({ user_id, team_id, date, yesterday, today, blockers }) {
+export async function saveStandup({ user_id, team_id, date, answers, yesterday, today, blockers }) {
+  // Upsert the standup parent row
   await db('standups')
     .insert({
       user_id,
       team_id,
       date,
-      yesterday: yesterday.trim(),
-      today: today.trim(),
-      blockers: blockers ? blockers.trim() : '',
       updated_at: db.fn.now()
     })
     .onConflict(['user_id', 'team_id', 'date'])
     .merge({
-      yesterday: yesterday.trim(),
-      today: today.trim(),
-      blockers: blockers ? blockers.trim() : '',
       updated_at: db.fn.now()
     });
 
-  return db('standups as s')
+  const standup = await db('standups')
+    .where({ user_id, team_id, date })
+    .first();
+
+  // Clear previous answers for this standup submission
+  await db('standup_answers').where('standup_id', standup.id).del();
+
+  const teamQuestions = await getQuestionsByTeamId(team_id);
+  const questionMap = new Map(teamQuestions.map(q => [q.id, q]));
+
+  // Handle dynamic answers array
+  if (Array.isArray(answers) && answers.length > 0) {
+    for (const item of answers) {
+      const q = item.question_id ? questionMap.get(Number(item.question_id)) : null;
+      const questionText = item.question_text || q?.text || 'Question';
+      await db('standup_answers').insert({
+        standup_id: standup.id,
+        question_id: item.question_id ? Number(item.question_id) : null,
+        question_text: questionText,
+        answer: (item.answer || '').trim()
+      });
+    }
+  } else {
+    // Legacy support for { yesterday, today, blockers }
+    const q1 = teamQuestions[0];
+    const q2 = teamQuestions[1];
+    const q3 = teamQuestions[2];
+
+    if (yesterday !== undefined) {
+      await db('standup_answers').insert({
+        standup_id: standup.id,
+        question_id: q1?.id || null,
+        question_text: q1?.text || DEFAULT_STANDUP_QUESTIONS[0].text,
+        answer: yesterday.trim()
+      });
+    }
+    if (today !== undefined) {
+      await db('standup_answers').insert({
+        standup_id: standup.id,
+        question_id: q2?.id || null,
+        question_text: q2?.text || DEFAULT_STANDUP_QUESTIONS[1].text,
+        answer: today.trim()
+      });
+    }
+    if (blockers !== undefined) {
+      await db('standup_answers').insert({
+        standup_id: standup.id,
+        question_id: q3?.id || null,
+        question_text: q3?.text || DEFAULT_STANDUP_QUESTIONS[2].text,
+        answer: blockers.trim()
+      });
+    }
+  }
+
+  // Fetch complete response with metadata & answers
+  const result = await db('standups as s')
     .join('users as u', 'u.id', 's.user_id')
     .join('teams as t', 't.id', 's.team_id')
-    .where('s.user_id', user_id)
-    .where('s.team_id', team_id)
-    .where('s.date', date)
+    .where('s.id', standup.id)
     .select('s.*', 'u.name as user_name', 'u.avatar_url as user_avatar', 't.name as team_name')
     .first();
+
+  const enriched = await attachAnswersToStandups([result]);
+  return enriched[0];
 }
