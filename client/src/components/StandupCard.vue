@@ -37,7 +37,7 @@
       </div>
     </div>
 
-    <!-- Dynamic Questions & Answers -->
+    <!-- Dynamic Questions & Answers (Markdown Rendered) -->
     <div v-if="standup.answers && standup.answers.length > 0" class="space-y-3.5 pt-1">
       <div
         v-for="(ans, idx) in standup.answers"
@@ -49,14 +49,17 @@
           class="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider mb-1.5"
           :class="getQuestionHeaderClass(ans)"
         >
-          <component :is="getQuestionIcon(ans, idx)" class="w-3.5 h-3.5" />
+          <component :is="getQuestionIcon(ans, idx)" class="w-3.5 h-3.5 flex-shrink-0" />
           <span>{{ idx + 1 }}. {{ ans.question_text }}</span>
         </div>
-        <p
-          class="text-sm whitespace-pre-line leading-relaxed pl-5"
-          :class="ans.answer && ans.answer.trim() ? 'text-slate-800' : 'text-slate-400 italic'"
-        >
-          {{ ans.answer && ans.answer.trim() ? ans.answer : '(No response provided)' }}
+        
+        <div
+          v-if="ans.answer && ans.answer.trim()"
+          class="text-sm text-slate-800 leading-relaxed pl-5 markdown-content"
+          v-html="renderMarkdown(ans.answer)"
+        ></div>
+        <p v-else class="text-sm text-slate-400 italic leading-relaxed pl-5">
+          (No response provided)
         </p>
       </div>
     </div>
@@ -69,7 +72,10 @@
           <History class="w-3.5 h-3.5 text-slate-500" />
           <span>1. What did you do yesterday (or previous working day)?</span>
         </div>
-        <p class="text-sm text-slate-800 whitespace-pre-line leading-relaxed pl-5">{{ standup.yesterday }}</p>
+        <div
+          class="text-sm text-slate-800 leading-relaxed pl-5 markdown-content"
+          v-html="renderMarkdown(standup.yesterday || '')"
+        ></div>
       </div>
 
       <!-- Question 2: Today -->
@@ -78,7 +84,10 @@
           <CheckCircle2 class="w-3.5 h-3.5 text-indigo-500" />
           <span>2. What are you working on today?</span>
         </div>
-        <p class="text-sm text-slate-800 whitespace-pre-line leading-relaxed pl-5">{{ standup.today }}</p>
+        <div
+          class="text-sm text-slate-800 leading-relaxed pl-5 markdown-content"
+          v-html="renderMarkdown(standup.today || '')"
+        ></div>
       </div>
 
       <!-- Question 3: Blockers & Help Needed -->
@@ -91,11 +100,14 @@
           <ShieldCheck v-else class="w-3.5 h-3.5 text-emerald-600" />
           <span>3. Any blockers? And who do you need help from?</span>
         </div>
-        <p
-          class="text-sm whitespace-pre-line leading-relaxed pl-5"
-          :class="hasLegacyBlockers ? 'text-amber-900 font-medium' : 'text-slate-500 italic'"
-        >
-          {{ standup.blockers && standup.blockers.trim() ? standup.blockers : 'None reported. All clear!' }}
+        <div
+          v-if="standup.blockers && standup.blockers.trim()"
+          class="text-sm leading-relaxed pl-5 markdown-content"
+          :class="hasLegacyBlockers ? 'text-amber-900 font-medium' : 'text-slate-600'"
+          v-html="renderMarkdown(standup.blockers)"
+        ></div>
+        <p v-else class="text-sm text-slate-500 italic leading-relaxed pl-5">
+          None reported. All clear!
         </p>
       </div>
     </div>
@@ -106,6 +118,7 @@
 import { computed } from 'vue';
 import { History, CheckCircle2, AlertTriangle, ShieldCheck, MessageSquare } from '@lucide/vue';
 import { useAuth } from '@/composables/useAuth.js';
+import { renderMarkdown } from '@/utils/markdown.js';
 
 const props = defineProps({
   standup: {
@@ -145,9 +158,12 @@ function isBlockerQuestion(text) {
 
 function hasActiveBlocker(answer) {
   if (!answer) return false;
-  const b = answer.trim().toLowerCase();
-  if (!b) return false;
-  if (['none', 'nil', 'n/a', 'no', 'none!', 'no blockers', 'all clear', 'no blocker', 'nope'].includes(b)) {
+  const cleaned = answer
+    .replace(/[*_`#\-]/g, '')
+    .trim()
+    .toLowerCase();
+  if (!cleaned) return false;
+  if (['none', 'nil', 'n/a', 'no', 'none!', 'no blockers', 'all clear', 'no blocker', 'nope'].includes(cleaned)) {
     return false;
   }
   return true;
@@ -181,7 +197,8 @@ function getQuestionIcon(ans, idx) {
 const hasLegacyBlockers = computed(() => {
   const b = props.standup.blockers?.trim()?.toLowerCase();
   if (!b) return false;
-  if (['none', 'nil', 'n/a', 'no', 'none!', 'no blockers', 'all clear', 'no blocker'].includes(b)) {
+  const cleaned = b.replace(/[*_`#\-]/g, '').trim().toLowerCase();
+  if (['none', 'nil', 'n/a', 'no', 'none!', 'no blockers', 'all clear', 'no blocker', 'nope'].includes(cleaned)) {
     return false;
   }
   return true;

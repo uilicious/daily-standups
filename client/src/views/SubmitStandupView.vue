@@ -94,13 +94,12 @@
                 Optional
               </span>
             </div>
-            <textarea
+            <MarkdownEditor
               v-model="answers[q.id]"
               :required="q.is_required"
-              rows="3"
+              :rows="3"
               :placeholder="getPlaceholder(q, idx)"
-              class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-            ></textarea>
+            />
           </div>
         </div>
 
@@ -136,6 +135,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '@/composables/useAuth.js';
 import { CheckCircle2, AlertCircle, Info, Loader2 } from '@lucide/vue';
+import MarkdownEditor from '@/components/MarkdownEditor.vue';
 
 const route = useRoute();
 const router = useRouter();
