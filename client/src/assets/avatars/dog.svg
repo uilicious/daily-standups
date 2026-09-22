@@ -1,14 +1,18 @@
 <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <circle cx="50" cy="50" r="48" fill="#FEF3C7" />
+  <!-- Droopy Dog Ears -->
   <ellipse cx="23" cy="50" rx="9" ry="18" fill="#B45309" transform="rotate(15 23 50)" />
   <ellipse cx="77" cy="50" rx="9" ry="18" fill="#B45309" transform="rotate(-15 77 50)" />
+  <!-- Head -->
   <circle cx="50" cy="56" r="28" fill="#D97706" />
-  <ellipse cx="50" cy="66" rx="14" ry="11" fill="#FEF3C7" />
+  <!-- Snout / Muzzle -->
+  <ellipse cx="50" cy="66" rx="14" ry="11" fill="#FFFBEB" />
   <ellipse cx="50" cy="62" rx="5" ry="3.5" fill="#1E293B" />
+  <!-- Cute Eyes -->
   <circle cx="38" cy="50" r="3.5" fill="#1E293B" />
-  <circle cx="39" cy="49" r="1" fill="#FFFFFF" />
+  <circle cx="39" cy="49" r="1.2" fill="#FFFFFF" />
   <circle cx="62" cy="50" r="3.5" fill="#1E293B" />
-  <circle cx="63" cy="49" r="1" fill="#FFFFFF" />
-  <path d="M47,68 Q50,75 53,68" stroke="#1E293B" stroke-width="1.5" fill="none" />
-  <path d="M48,70 Q50,77 54,73" stroke="#F43F5E" stroke-width="3.5" stroke-linecap="round" fill="none" />
+  <circle cx="63" cy="49" r="1.2" fill="#FFFFFF" />
+  <!-- Cheerful Smile without tongue -->
+  <path d="M50,64 L50,67 M46,67 Q50,71 54,67" stroke="#1E293B" stroke-width="1.8" fill="none" stroke-linecap="round" />
 </svg>

@@ -1,4 +1,4 @@
-import foxSvg from '@/assets/avatars/fox.svg?raw';
+import sheepSvg from '@/assets/avatars/sheep.svg?raw';
 import pandaSvg from '@/assets/avatars/panda.svg?raw';
 import catSvg from '@/assets/avatars/cat.svg?raw';
 import dogSvg from '@/assets/avatars/dog.svg?raw';
@@ -16,7 +16,7 @@ export function svgToDataUrl(svgString) {
 }
 
 export const ANIMAL_AVATARS = [
-  { id: 'fox', name: 'Fox', svg: foxSvg },
+  { id: 'sheep', name: 'Sheep', svg: sheepSvg },
   { id: 'panda', name: 'Panda', svg: pandaSvg },
   { id: 'cat', name: 'Cat', svg: catSvg },
   { id: 'dog', name: 'Dog', svg: dogSvg },
