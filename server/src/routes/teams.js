@@ -2,13 +2,13 @@ import { getTeamById, getTeamBySlug, getStandupsByTeamAndDate, getUserById } fro
 
 export default async function teamRoutes(fastify, options) {
   // Helper to ensure user is logged in
-  function getAuthenticatedUser(request, reply) {
+  async function getAuthenticatedUser(request, reply) {
     if (!request.session || !request.session.userId) {
       reply.code(401).send({ error: 'Authentication required' });
       return null;
     }
 
-    const user = getUserById(request.session.userId);
+    const user = await getUserById(request.session.userId);
     if (!user) {
       reply.code(401).send({ error: 'User not found' });
       return null;
@@ -19,7 +19,7 @@ export default async function teamRoutes(fastify, options) {
 
   // Get teams that the current authenticated user belongs to
   fastify.get('/', async (request, reply) => {
-    const user = getAuthenticatedUser(request, reply);
+    const user = await getAuthenticatedUser(request, reply);
     if (!user) return;
 
     // Only return the teams this user is a member of
@@ -28,13 +28,13 @@ export default async function teamRoutes(fastify, options) {
 
   // Get specific team (only if member)
   fastify.get('/:idOrSlug', async (request, reply) => {
-    const user = getAuthenticatedUser(request, reply);
+    const user = await getAuthenticatedUser(request, reply);
     if (!user) return;
 
     const { idOrSlug } = request.params;
-    let team = isNaN(idOrSlug) ? getTeamBySlug(idOrSlug) : getTeamById(Number(idOrSlug));
+    let team = isNaN(idOrSlug) ? await getTeamBySlug(idOrSlug) : await getTeamById(Number(idOrSlug));
     if (!team) {
-      team = getTeamBySlug(idOrSlug);
+      team = await getTeamBySlug(idOrSlug);
     }
 
     if (!team) {
@@ -52,15 +52,15 @@ export default async function teamRoutes(fastify, options) {
 
   // Get standups for team on date (only if member)
   fastify.get('/:idOrSlug/standups', async (request, reply) => {
-    const user = getAuthenticatedUser(request, reply);
+    const user = await getAuthenticatedUser(request, reply);
     if (!user) return;
 
     const { idOrSlug } = request.params;
     const { date } = request.query;
 
-    let team = isNaN(idOrSlug) ? getTeamBySlug(idOrSlug) : getTeamById(Number(idOrSlug));
+    let team = isNaN(idOrSlug) ? await getTeamBySlug(idOrSlug) : await getTeamById(Number(idOrSlug));
     if (!team) {
-      team = getTeamBySlug(idOrSlug);
+      team = await getTeamBySlug(idOrSlug);
     }
 
     if (!team) {
@@ -74,7 +74,7 @@ export default async function teamRoutes(fastify, options) {
     }
 
     const queryDate = date || new Date().toISOString().split('T')[0];
-    const standups = getStandupsByTeamAndDate(team.id, queryDate);
+    const standups = await getStandupsByTeamAndDate(team.id, queryDate);
 
     return {
       team,

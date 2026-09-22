@@ -10,7 +10,7 @@ export default async function authRoutes(fastify, options) {
       return reply.code(400).send({ error: 'Email and password are required' });
     }
 
-    const user = getUserByEmailWithPassword(email);
+    const user = await getUserByEmailWithPassword(email);
     if (!user) {
       return reply.code(401).send({ error: 'Invalid email or password' });
     }
@@ -27,7 +27,7 @@ export default async function authRoutes(fastify, options) {
     request.session.userId = user.id;
 
     // Return sanitized user object
-    const cleanUser = getUserById(user.id);
+    const cleanUser = await getUserById(user.id);
     return { ok: true, user: cleanUser };
   });
 
@@ -37,7 +37,7 @@ export default async function authRoutes(fastify, options) {
       return reply.code(401).send({ error: 'Not authenticated' });
     }
 
-    const user = getUserById(request.session.userId);
+    const user = await getUserById(request.session.userId);
     if (!user) {
       request.session.destroy();
       return reply.code(401).send({ error: 'User no longer exists' });
@@ -119,13 +119,13 @@ export default async function authRoutes(fastify, options) {
       }
 
       // Find user in DB
-      let user = getUserByEmail(profile.email);
+      let user = await getUserByEmail(profile.email);
 
       if (!user) {
         // If ALLOW_AUTO_SIGNUP is true, create user as member; otherwise check if admin configured
         const allowAutoSignup = process.env.ALLOW_AUTO_SIGNUP === 'true';
         if (allowAutoSignup) {
-          user = createUser({
+          user = await createUser({
             email: profile.email,
             name: profile.name || profile.email.split('@')[0],
             avatar_url: profile.picture,
@@ -157,7 +157,7 @@ export default async function authRoutes(fastify, options) {
       return reply.code(400).send({ error: 'Email is required' });
     }
 
-    const user = getUserByEmail(email);
+    const user = await getUserByEmail(email);
     if (!user) {
       return reply.code(404).send({ error: `User with email ${email} not found` });
     }

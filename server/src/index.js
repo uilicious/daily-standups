@@ -26,7 +26,7 @@ const server = Fastify({
 });
 
 // Initialize database
-initDatabase();
+await initDatabase();
 
 // Register CORS
 await server.register(cors, {

@@ -1,242 +1,253 @@
 import db from './index.js';
 import { hashPassword } from '../utils/auth.js';
 
-export function getUserById(id) {
-  const user = db.prepare('SELECT id, email, name, avatar_url, role, created_at FROM users WHERE id = ?').get(id);
+export async function getUserById(id) {
+  const user = await db('users')
+    .select('id', 'email', 'name', 'avatar_url', 'role', 'created_at')
+    .where('id', id)
+    .first();
+
   if (!user) return null;
 
-  const teams = db.prepare(`
-    SELECT t.id, t.name, t.slug, t.description
-    FROM teams t
-    JOIN user_teams ut ON ut.team_id = t.id
-    WHERE ut.user_id = ?
-    ORDER BY t.name ASC
-  `).all(id);
+  user.teams = await db('teams as t')
+    .join('user_teams as ut', 'ut.team_id', 't.id')
+    .where('ut.user_id', id)
+    .select('t.id', 't.name', 't.slug', 't.description')
+    .orderBy('t.name', 'asc');
 
-  user.teams = teams;
   return user;
 }
 
-export function getUserByEmail(email) {
-  const user = db.prepare('SELECT id, email, name, avatar_url, role, created_at FROM users WHERE LOWER(email) = LOWER(?)').get(email);
+export async function getUserByEmail(email) {
+  const user = await db('users')
+    .select('id', 'email', 'name', 'avatar_url', 'role', 'created_at')
+    .whereRaw('LOWER(email) = ?', [email.trim().toLowerCase()])
+    .first();
+
   if (!user) return null;
 
-  const teams = db.prepare(`
-    SELECT t.id, t.name, t.slug, t.description
-    FROM teams t
-    JOIN user_teams ut ON ut.team_id = t.id
-    WHERE ut.user_id = ?
-    ORDER BY t.name ASC
-  `).all(user.id);
+  user.teams = await db('teams as t')
+    .join('user_teams as ut', 'ut.team_id', 't.id')
+    .where('ut.user_id', user.id)
+    .select('t.id', 't.name', 't.slug', 't.description')
+    .orderBy('t.name', 'asc');
 
-  user.teams = teams;
   return user;
 }
 
-export function getUserByEmailWithPassword(email) {
-  const user = db.prepare('SELECT id, email, name, password_hash, avatar_url, role, created_at FROM users WHERE LOWER(email) = LOWER(?)').get(email);
+export async function getUserByEmailWithPassword(email) {
+  const user = await db('users')
+    .select('id', 'email', 'name', 'password_hash', 'avatar_url', 'role', 'created_at')
+    .whereRaw('LOWER(email) = ?', [email.trim().toLowerCase()])
+    .first();
+
   if (!user) return null;
 
-  const teams = db.prepare(`
-    SELECT t.id, t.name, t.slug, t.description
-    FROM teams t
-    JOIN user_teams ut ON ut.team_id = t.id
-    WHERE ut.user_id = ?
-    ORDER BY t.name ASC
-  `).all(user.id);
+  user.teams = await db('teams as t')
+    .join('user_teams as ut', 'ut.team_id', 't.id')
+    .where('ut.user_id', user.id)
+    .select('t.id', 't.name', 't.slug', 't.description')
+    .orderBy('t.name', 'asc');
 
-  user.teams = teams;
   return user;
 }
 
-export function getAllUsers() {
-  const users = db.prepare('SELECT id, email, name, avatar_url, role, created_at FROM users ORDER BY name ASC').all();
-  
-  const userTeamsStmt = db.prepare(`
-    SELECT t.id, t.name, t.slug
-    FROM teams t
-    JOIN user_teams ut ON ut.team_id = t.id
-    WHERE ut.user_id = ?
-    ORDER BY t.name ASC
-  `);
+export async function getAllUsers() {
+  const users = await db('users')
+    .select('id', 'email', 'name', 'avatar_url', 'role', 'created_at')
+    .orderBy('name', 'asc');
 
-  return users.map(user => {
-    user.teams = userTeamsStmt.all(user.id);
-    return user;
-  });
+  for (const user of users) {
+    user.teams = await db('teams as t')
+      .join('user_teams as ut', 'ut.team_id', 't.id')
+      .where('ut.user_id', user.id)
+      .select('t.id', 't.name', 't.slug')
+      .orderBy('t.name', 'asc');
+  }
+
+  return users;
 }
 
-export function createUser({ email, name, password, avatar_url, role = 'member', team_ids = [] }) {
+export async function createUser({ email, name, password, avatar_url, role = 'member', team_ids = [] }) {
   const avatar = avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name || email)}`;
   const passwordHash = password ? hashPassword(password) : null;
 
-  const insertUser = db.prepare(`
-    INSERT INTO users (email, name, password_hash, avatar_url, role)
-    VALUES (?, ?, ?, ?, ?)
-  `);
+  const insertResult = await db('users').insert({
+    email: email.trim().toLowerCase(),
+    name: name.trim(),
+    password_hash: passwordHash,
+    avatar_url: avatar,
+    role
+  });
 
-  const result = insertUser.run(email.trim().toLowerCase(), name.trim(), passwordHash, avatar, role);
-  const userId = result.lastInsertRowid;
+  let userId = Array.isArray(insertResult) ? insertResult[0] : insertResult;
+  if (typeof userId === 'object' && userId !== null) {
+    userId = userId.id || userId;
+  }
 
-  if (team_ids && team_ids.length > 0) {
-    const insertUserTeam = db.prepare('INSERT OR IGNORE INTO user_teams (user_id, team_id) VALUES (?, ?)');
+  if (Array.isArray(team_ids) && team_ids.length > 0) {
     for (const teamId of team_ids) {
-      insertUserTeam.run(userId, teamId);
+      await db('user_teams')
+        .insert({ user_id: userId, team_id: Number(teamId) })
+        .onConflict(['user_id', 'team_id'])
+        .ignore();
     }
   }
 
   return getUserById(userId);
 }
 
-export function updateUser(id, { name, email, password, role, avatar_url, team_ids }) {
-  const updates = [];
-  const params = [];
+export async function updateUser(id, { name, email, password, role, avatar_url, team_ids }) {
+  const updates = {};
+  if (name !== undefined) updates.name = name.trim();
+  if (email !== undefined) updates.email = email.trim().toLowerCase();
+  if (password) updates.password_hash = hashPassword(password);
+  if (role !== undefined) updates.role = role;
+  if (avatar_url !== undefined) updates.avatar_url = avatar_url;
 
-  if (name !== undefined) {
-    updates.push('name = ?');
-    params.push(name.trim());
-  }
-  if (email !== undefined) {
-    updates.push('email = ?');
-    params.push(email.trim().toLowerCase());
-  }
-  if (password) {
-    updates.push('password_hash = ?');
-    params.push(hashPassword(password));
-  }
-  if (role !== undefined) {
-    updates.push('role = ?');
-    params.push(role);
-  }
-  if (avatar_url !== undefined) {
-    updates.push('avatar_url = ?');
-    params.push(avatar_url);
-  }
-
-  if (updates.length > 0) {
-    params.push(id);
-    db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  if (Object.keys(updates).length > 0) {
+    await db('users').where('id', id).update(updates);
   }
 
   if (Array.isArray(team_ids)) {
-    db.prepare('DELETE FROM user_teams WHERE user_id = ?').run(id);
-    const insertUserTeam = db.prepare('INSERT OR IGNORE INTO user_teams (user_id, team_id) VALUES (?, ?)');
+    await db('user_teams').where('user_id', id).del();
     for (const teamId of team_ids) {
-      insertUserTeam.run(id, teamId);
+      await db('user_teams')
+        .insert({ user_id: id, team_id: Number(teamId) })
+        .onConflict(['user_id', 'team_id'])
+        .ignore();
     }
   }
 
   return getUserById(id);
 }
 
-export function deleteUser(id) {
-  return db.prepare('DELETE FROM users WHERE id = ?').run(id);
+export async function deleteUser(id) {
+  return db('users').where('id', id).del();
 }
 
-export function getAllTeams() {
-  return db.prepare(`
-    SELECT t.id, t.name, t.slug, t.description, t.created_at,
-           COUNT(ut.user_id) as member_count
-    FROM teams t
-    LEFT JOIN user_teams ut ON ut.team_id = t.id
-    GROUP BY t.id
-    ORDER BY t.id ASC
-  `).all();
+export async function getAllTeams() {
+  const teams = await db('teams as t')
+    .leftJoin('user_teams as ut', 'ut.team_id', 't.id')
+    .select('t.id', 't.name', 't.slug', 't.description', 't.created_at')
+    .count('ut.user_id as member_count')
+    .groupBy('t.id', 't.name', 't.slug', 't.description', 't.created_at')
+    .orderBy('t.id', 'asc');
+
+  // Normalize member_count to integer
+  return teams.map(t => ({
+    ...t,
+    member_count: Number(t.member_count || 0)
+  }));
 }
 
-export function getTeamBySlug(slug) {
-  return db.prepare('SELECT id, name, slug, description, created_at FROM teams WHERE slug = ?').get(slug);
+export async function getTeamBySlug(slug) {
+  return db('teams').where('slug', slug).first();
 }
 
-export function getTeamById(id) {
-  return db.prepare('SELECT id, name, slug, description, created_at FROM teams WHERE id = ?').get(id);
+export async function getTeamById(id) {
+  return db('teams').where('id', id).first();
 }
 
-export function createTeam({ name, slug, description = '' }) {
+export async function createTeam({ name, slug, description = '' }) {
   const generatedSlug = slug ? slug.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-') : name.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-');
-  const result = db.prepare(`
-    INSERT INTO teams (name, slug, description)
-    VALUES (?, ?, ?)
-  `).run(name.trim(), generatedSlug, description ? description.trim() : '');
+  const result = await db('teams').insert({
+    name: name.trim(),
+    slug: generatedSlug,
+    description: description ? description.trim() : ''
+  });
 
-  return getTeamById(result.lastInsertRowid);
+  let teamId = Array.isArray(result) ? result[0] : result;
+  if (typeof teamId === 'object' && teamId !== null) {
+    teamId = teamId.id || teamId;
+  }
+
+  return getTeamById(teamId);
 }
 
-export function updateTeam(id, { name, description }) {
-  db.prepare(`
-    UPDATE teams
-    SET name = COALESCE(?, name),
-        description = COALESCE(?, description)
-    WHERE id = ?
-  `).run(name ? name.trim() : null, description !== undefined ? description.trim() : null, id);
+export async function updateTeam(id, { name, description }) {
+  const updates = {};
+  if (name !== undefined && name !== null) updates.name = name.trim();
+  if (description !== undefined && description !== null) updates.description = description.trim();
+
+  if (Object.keys(updates).length > 0) {
+    await db('teams').where('id', id).update(updates);
+  }
 
   return getTeamById(id);
 }
 
-export function deleteTeam(id) {
-  return db.prepare('DELETE FROM teams WHERE id = ?').run(id);
+export async function deleteTeam(id) {
+  return db('teams').where('id', id).del();
 }
 
-export function getStandupsByTeamAndDate(teamId, date) {
-  return db.prepare(`
-    SELECT 
-      s.id,
-      s.user_id,
-      s.team_id,
-      s.date,
-      s.yesterday,
-      s.today,
-      s.blockers,
-      s.created_at,
-      s.updated_at,
-      u.name as user_name,
-      u.email as user_email,
-      u.avatar_url as user_avatar,
-      u.role as user_role
-    FROM standups s
-    JOIN users u ON u.id = s.user_id
-    WHERE s.team_id = ? AND s.date = ?
-    ORDER BY s.updated_at DESC
-  `).all(teamId, date);
+export async function getStandupsByTeamAndDate(teamId, date) {
+  return db('standups as s')
+    .join('users as u', 'u.id', 's.user_id')
+    .where('s.team_id', teamId)
+    .where('s.date', date)
+    .select(
+      's.id',
+      's.user_id',
+      's.team_id',
+      's.date',
+      's.yesterday',
+      's.today',
+      's.blockers',
+      's.created_at',
+      's.updated_at',
+      'u.name as user_name',
+      'u.email as user_email',
+      'u.avatar_url as user_avatar',
+      'u.role as user_role'
+    )
+    .orderBy('s.updated_at', 'desc');
 }
 
-export function getTodayStandupsForUser(userId, date) {
-  return db.prepare(`
-    SELECT 
-      s.id,
-      s.team_id,
-      s.date,
-      s.yesterday,
-      s.today,
-      s.blockers,
-      s.created_at,
-      s.updated_at,
-      t.name as team_name,
-      t.slug as team_slug
-    FROM standups s
-    JOIN teams t ON t.id = s.team_id
-    WHERE s.user_id = ? AND s.date = ?
-  `).all(userId, date);
+export async function getTodayStandupsForUser(userId, date) {
+  return db('standups as s')
+    .join('teams as t', 't.id', 's.team_id')
+    .where('s.user_id', userId)
+    .where('s.date', date)
+    .select(
+      's.id',
+      's.team_id',
+      's.date',
+      's.yesterday',
+      's.today',
+      's.blockers',
+      's.created_at',
+      's.updated_at',
+      't.name as team_name',
+      't.slug as team_slug'
+    );
 }
 
-export function saveStandup({ user_id, team_id, date, yesterday, today, blockers }) {
-  const stmt = db.prepare(`
-    INSERT INTO standups (user_id, team_id, date, yesterday, today, blockers, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(user_id, team_id, date) DO UPDATE SET
-      yesterday = excluded.yesterday,
-      today = excluded.today,
-      blockers = excluded.blockers,
-      updated_at = CURRENT_TIMESTAMP
-  `);
+export async function saveStandup({ user_id, team_id, date, yesterday, today, blockers }) {
+  await db('standups')
+    .insert({
+      user_id,
+      team_id,
+      date,
+      yesterday: yesterday.trim(),
+      today: today.trim(),
+      blockers: blockers ? blockers.trim() : '',
+      updated_at: db.fn.now()
+    })
+    .onConflict(['user_id', 'team_id', 'date'])
+    .merge({
+      yesterday: yesterday.trim(),
+      today: today.trim(),
+      blockers: blockers ? blockers.trim() : '',
+      updated_at: db.fn.now()
+    });
 
-  stmt.run(user_id, team_id, date, yesterday.trim(), today.trim(), blockers ? blockers.trim() : '');
-  
-  return db.prepare(`
-    SELECT s.*, u.name as user_name, u.avatar_url as user_avatar, t.name as team_name
-    FROM standups s
-    JOIN users u ON u.id = s.user_id
-    JOIN teams t ON t.id = s.team_id
-    WHERE s.user_id = ? AND s.team_id = ? AND s.date = ?
-  `).get(user_id, team_id, date);
+  return db('standups as s')
+    .join('users as u', 'u.id', 's.user_id')
+    .join('teams as t', 't.id', 's.team_id')
+    .where('s.user_id', user_id)
+    .where('s.team_id', team_id)
+    .where('s.date', date)
+    .select('s.*', 'u.name as user_name', 'u.avatar_url as user_avatar', 't.name as team_name')
+    .first();
 }

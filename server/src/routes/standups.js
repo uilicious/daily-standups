@@ -2,12 +2,12 @@ import { getUserById, getTodayStandupsForUser, saveStandup, getTeamById } from '
 
 export default async function standupRoutes(fastify, options) {
   // Authentication check helper
-  function checkAuth(request, reply) {
+  async function checkAuth(request, reply) {
     if (!request.session || !request.session.userId) {
       reply.code(401).send({ error: 'You must be logged in to access standups' });
       return null;
     }
-    const user = getUserById(request.session.userId);
+    const user = await getUserById(request.session.userId);
     if (!user) {
       reply.code(401).send({ error: 'Invalid session user' });
       return null;
@@ -17,11 +17,11 @@ export default async function standupRoutes(fastify, options) {
 
   // Get current user's standup submissions for today
   fastify.get('/today', async (request, reply) => {
-    const user = checkAuth(request, reply);
+    const user = await checkAuth(request, reply);
     if (!user) return;
 
     const todayStr = new Date().toISOString().split('T')[0];
-    const userStandups = getTodayStandupsForUser(user.id, todayStr);
+    const userStandups = await getTodayStandupsForUser(user.id, todayStr);
 
     return {
       date: todayStr,
@@ -31,7 +31,7 @@ export default async function standupRoutes(fastify, options) {
 
   // Submit or update standup for a specific team
   fastify.post('/', async (request, reply) => {
-    const user = checkAuth(request, reply);
+    const user = await checkAuth(request, reply);
     if (!user) return;
 
     const { team_id, date, yesterday, today, blockers } = request.body || {};
@@ -46,7 +46,7 @@ export default async function standupRoutes(fastify, options) {
       return reply.code(400).send({ error: 'Question 2: What are you working on today? is required' });
     }
 
-    const team = getTeamById(Number(team_id));
+    const team = await getTeamById(Number(team_id));
     if (!team) {
       return reply.code(404).send({ error: 'Team not found' });
     }
@@ -59,7 +59,7 @@ export default async function standupRoutes(fastify, options) {
 
     const submissionDate = date || new Date().toISOString().split('T')[0];
 
-    const saved = saveStandup({
+    const saved = await saveStandup({
       user_id: user.id,
       team_id: team.id,
       date: submissionDate,

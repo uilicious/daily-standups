@@ -18,7 +18,7 @@ export default async function adminRoutes(fastify, options) {
       return reply.code(401).send({ error: 'Authentication required' });
     }
 
-    const user = getUserById(request.session.userId);
+    const user = await getUserById(request.session.userId);
     if (!user || user.role !== 'admin') {
       return reply.code(403).send({ error: 'Admin privileges required' });
     }
@@ -30,7 +30,7 @@ export default async function adminRoutes(fastify, options) {
 
   // 1. List all users with their teams
   fastify.get('/users', async (request, reply) => {
-    const users = getAllUsers();
+    const users = await getAllUsers();
     return { users };
   });
 
@@ -45,12 +45,12 @@ export default async function adminRoutes(fastify, options) {
       return reply.code(400).send({ error: 'Name is required' });
     }
 
-    const existing = getUserByEmail(email.trim());
+    const existing = await getUserByEmail(email.trim());
     if (existing) {
       return reply.code(409).send({ error: `A user with email "${email}" already exists` });
     }
 
-    const newUser = createUser({
+    const newUser = await createUser({
       email: email.trim(),
       name: name.trim(),
       password: password && password.trim() ? password.trim() : null,
@@ -67,13 +67,13 @@ export default async function adminRoutes(fastify, options) {
     const userId = Number(id);
     const { name, email, password, role, team_ids } = request.body || {};
 
-    const existing = getUserById(userId);
+    const existing = await getUserById(userId);
     if (!existing) {
       return reply.code(404).send({ error: 'User not found' });
     }
 
     if (email && email.toLowerCase() !== existing.email.toLowerCase()) {
-      const emailConflict = getUserByEmail(email);
+      const emailConflict = await getUserByEmail(email);
       if (emailConflict && emailConflict.id !== userId) {
         return reply.code(409).send({ error: `Email "${email}" is already used by another account` });
       }
@@ -81,14 +81,14 @@ export default async function adminRoutes(fastify, options) {
 
     // Prevent removing the last admin
     if (existing.role === 'admin' && role === 'member') {
-      const allUsers = getAllUsers();
+      const allUsers = await getAllUsers();
       const adminCount = allUsers.filter(u => u.role === 'admin').length;
       if (adminCount <= 1) {
         return reply.code(400).send({ error: 'Cannot demote the last remaining admin' });
       }
     }
 
-    const updated = updateUser(userId, {
+    const updated = await updateUser(userId, {
       name,
       email,
       password: password && password.trim() ? password.trim() : undefined,
@@ -108,12 +108,12 @@ export default async function adminRoutes(fastify, options) {
       return reply.code(400).send({ error: 'You cannot delete your own account' });
     }
 
-    const existing = getUserById(userId);
+    const existing = await getUserById(userId);
     if (!existing) {
       return reply.code(404).send({ error: 'User not found' });
     }
 
-    deleteUser(userId);
+    await deleteUser(userId);
     return { ok: true, message: `User ${existing.name} deleted` };
   });
 
@@ -121,7 +121,7 @@ export default async function adminRoutes(fastify, options) {
 
   // List all teams across the company for admin management
   fastify.get('/teams', async (request, reply) => {
-    const teams = getAllTeams();
+    const teams = await getAllTeams();
     return { teams };
   });
 
@@ -134,14 +134,14 @@ export default async function adminRoutes(fastify, options) {
     }
 
     try {
-      const newTeam = createTeam({
+      const newTeam = await createTeam({
         name: name.trim(),
         slug: slug && slug.trim() ? slug.trim() : undefined,
         description: description || ''
       });
       return { ok: true, team: newTeam };
     } catch (err) {
-      if (err.message && err.message.includes('UNIQUE constraint failed')) {
+      if (err.message && (err.message.includes('UNIQUE constraint') || err.message.includes('duplicate key') || err.message.includes('ER_DUP_ENTRY'))) {
         return reply.code(409).send({ error: 'A team with this slug or name already exists' });
       }
       throw err;
@@ -154,7 +154,7 @@ export default async function adminRoutes(fastify, options) {
     const teamId = Number(id);
     const { name, description } = request.body || {};
 
-    const updated = updateTeam(teamId, { name, description });
+    const updated = await updateTeam(teamId, { name, description });
     if (!updated) {
       return reply.code(404).send({ error: 'Team not found' });
     }
@@ -167,7 +167,7 @@ export default async function adminRoutes(fastify, options) {
     const { id } = request.params;
     const teamId = Number(id);
 
-    deleteTeam(teamId);
+    await deleteTeam(teamId);
     return { ok: true, message: 'Team deleted' };
   });
 }
