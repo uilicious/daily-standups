@@ -1,4 +1,4 @@
-import { getUserByEmailWithPassword, getUserById, getUserByEmail, createUser } from '../db/queries.js';
+import { getUserByEmailWithPassword, getUserById, getUserByEmail, createUser, updateUser } from '../db/queries.js';
 import { verifyPassword } from '../utils/auth.js';
 
 export default async function authRoutes(fastify, options) {
@@ -28,6 +28,7 @@ export default async function authRoutes(fastify, options) {
 
     // Return sanitized user object
     const cleanUser = await getUserById(user.id);
+    cleanUser.has_password = Boolean(user.password_hash);
     return { ok: true, user: cleanUser };
   });
 
@@ -42,6 +43,9 @@ export default async function authRoutes(fastify, options) {
       request.session.destroy();
       return reply.code(401).send({ error: 'User no longer exists' });
     }
+
+    const fullUser = await getUserByEmailWithPassword(user.email);
+    user.has_password = Boolean(fullUser?.password_hash);
 
     return { user };
   });
@@ -163,6 +167,59 @@ export default async function authRoutes(fastify, options) {
     }
 
     request.session.userId = user.id;
+    const fullUser = await getUserByEmailWithPassword(user.email);
+    user.has_password = Boolean(fullUser?.password_hash);
     return { ok: true, user };
+  });
+
+  // 7. Update current user profile
+  fastify.put('/profile', async (request, reply) => {
+    if (!request.session || !request.session.userId) {
+      return reply.code(401).send({ error: 'Not authenticated' });
+    }
+
+    const userId = request.session.userId;
+    const currentUser = await getUserById(userId);
+    if (!currentUser) {
+      return reply.code(404).send({ error: 'User not found' });
+    }
+
+    const { name, avatar_url, current_password, new_password } = request.body || {};
+    const updates = {};
+
+    if (name !== undefined) {
+      if (!name || !name.trim()) {
+        return reply.code(400).send({ error: 'Display name cannot be empty' });
+      }
+      updates.name = name.trim();
+    }
+
+    if (avatar_url !== undefined) {
+      updates.avatar_url = avatar_url;
+    }
+
+    if (new_password) {
+      if (typeof new_password !== 'string' || new_password.trim().length < 6) {
+        return reply.code(400).send({ error: 'New password must be at least 6 characters long' });
+      }
+
+      const fullUser = await getUserByEmailWithPassword(currentUser.email);
+      if (fullUser && fullUser.password_hash) {
+        if (!current_password) {
+          return reply.code(400).send({ error: 'Current password is required to change your password' });
+        }
+        const isValid = verifyPassword(current_password, fullUser.password_hash);
+        if (!isValid) {
+          return reply.code(400).send({ error: 'Current password is incorrect' });
+        }
+      }
+      updates.password = new_password.trim();
+    }
+
+    const updatedUser = await updateUser(userId, updates);
+    const fullUpdatedUser = await getUserByEmailWithPassword(updatedUser.email);
+    updatedUser.has_password = Boolean(fullUpdatedUser?.password_hash);
+
+    return { ok: true, user: updatedUser };
   });
 }

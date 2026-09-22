@@ -67,6 +67,23 @@ export function useAuth() {
     return data.user;
   }
 
+  async function updateProfile({ name, avatar_url, current_password, new_password }) {
+    const res = await fetch('/api/auth/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ name, avatar_url, current_password, new_password })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to update profile');
+    }
+
+    user.value = data.user;
+    return data.user;
+  }
+
   async function logout() {
     try {
       await fetch('/api/auth/logout', {
@@ -90,6 +107,7 @@ export function useAuth() {
     fetchUser,
     login,
     devLogin,
+    updateProfile,
     logout
   };
 }

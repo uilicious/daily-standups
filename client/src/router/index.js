@@ -6,6 +6,7 @@ import SubmitStandupView from '@/views/SubmitStandupView.vue';
 import AdminView from '@/views/AdminView.vue';
 import LoginView from '@/views/LoginView.vue';
 import NoTeamsView from '@/views/NoTeamsView.vue';
+import ProfileView from '@/views/ProfileView.vue';
 
 const routes = [
   {
@@ -23,6 +24,12 @@ const routes = [
     path: '/submit',
     name: 'SubmitStandup',
     component: SubmitStandupView,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/profile',
+    name: 'Profile',
+    component: ProfileView,
     meta: { requiresAuth: true }
   },
   {
@@ -63,7 +70,7 @@ router.beforeEach(async (to, from, next) => {
 
   const isAuth = !!user.value;
   const isAdmin = user.value?.role === 'admin';
-  const isManager = user.value?.role === 'manager' || (user.value?.teams || []).some(t => t.team_role === 'manager');
+  const isManager = (user.value?.teams || []).some(t => t.team_role === 'manager');
   const canManage = isAdmin || isManager;
 
   if (to.meta.guestOnly && isAuth) {

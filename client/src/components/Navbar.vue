@@ -50,24 +50,90 @@
             <span class="hidden sm:inline">Admin</span>
           </router-link>
 
-          <!-- User Profile & Logout -->
-          <div v-if="user" class="flex items-center pl-2 border-l border-slate-200 space-x-2">
-            <img
-              :src="user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name}`"
-              :alt="user.name"
-              class="w-8 h-8 rounded-full border border-slate-200 bg-slate-100 object-cover"
-            />
-            <div class="hidden lg:block text-left">
-              <p class="text-xs font-semibold text-slate-800 leading-tight">{{ user.name }}</p>
-              <p class="text-[10px] text-slate-500 truncate max-w-[120px]">{{ roleLabel }}</p>
-            </div>
+          <!-- User Profile & Dropdown -->
+          <div v-if="user" class="relative pl-2 border-l border-slate-200" ref="dropdownRef">
             <button
-              @click="handleLogout"
-              title="Sign Out"
-              class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+              @click="isDropdownOpen = !isDropdownOpen"
+              class="flex items-center space-x-2 p-1.5 rounded-xl hover:bg-slate-100 transition focus:outline-none"
+              :aria-expanded="isDropdownOpen"
+              title="Account menu"
             >
-              <LogOut class="w-4 h-4" />
+              <img
+                :src="user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name}`"
+                :alt="user.name"
+                class="w-8 h-8 rounded-full border border-slate-200 bg-slate-100 object-cover flex-shrink-0"
+              />
+              <div class="hidden lg:block text-left">
+                <p class="text-xs font-semibold text-slate-800 leading-tight">{{ user.name }}</p>
+                <p class="text-[10px] text-slate-500 truncate max-w-[120px]">{{ roleLabel }}</p>
+              </div>
+              <ChevronDown
+                class="w-3.5 h-3.5 text-slate-400 transition-transform duration-200"
+                :class="{ 'rotate-180': isDropdownOpen }"
+              />
             </button>
+
+            <!-- Dropdown Menu -->
+            <transition
+              enter-active-class="transition duration-150 ease-out"
+              enter-from-class="transform scale-95 opacity-0"
+              enter-to-class="transform scale-100 opacity-100"
+              leave-active-class="transition duration-100 ease-in"
+              leave-from-class="transform scale-100 opacity-100"
+              leave-to-class="transform scale-95 opacity-0"
+            >
+              <div
+                v-if="isDropdownOpen"
+                class="absolute right-0 mt-2 w-56 rounded-2xl bg-white shadow-xl border border-slate-200 py-1.5 z-50 text-xs focus:outline-none"
+              >
+                <!-- User Summary Header -->
+                <div class="px-3.5 py-2.5 border-b border-slate-100">
+                  <p class="font-semibold text-slate-900 truncate text-sm">{{ user.name }}</p>
+                  <p class="text-[11px] text-slate-500 truncate mt-0.5">{{ user.email }}</p>
+                  <div class="mt-2">
+                    <span
+                      class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                      :class="user.role === 'admin' ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-slate-100 text-slate-600'"
+                    >
+                      {{ user.role === 'admin' ? 'Admin' : 'Standard' }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Menu Links -->
+                <div class="py-1">
+                  <router-link
+                    to="/profile"
+                    @click="isDropdownOpen = false"
+                    class="flex items-center space-x-2.5 px-3.5 py-2 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition font-medium"
+                  >
+                    <UserCircle class="w-4 h-4 text-slate-400" />
+                    <span>Manage Profile</span>
+                  </router-link>
+
+                  <router-link
+                    v-if="canManage"
+                    to="/admin"
+                    @click="isDropdownOpen = false"
+                    class="flex items-center space-x-2.5 px-3.5 py-2 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition font-medium"
+                  >
+                    <ShieldAlert class="w-4 h-4 text-slate-400" />
+                    <span>Admin Console</span>
+                  </router-link>
+                </div>
+
+                <!-- Sign Out Action -->
+                <div class="border-t border-slate-100 pt-1">
+                  <button
+                    @click="handleLogoutClick"
+                    class="w-full flex items-center space-x-2.5 px-3.5 py-2 text-rose-600 hover:bg-rose-50 transition font-medium text-left"
+                  >
+                    <LogOut class="w-4 h-4 text-rose-500" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              </div>
+            </transition>
           </div>
           <div v-else>
             <router-link
@@ -100,14 +166,39 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '@/composables/useAuth.js';
-import { CalendarCheck, PlusCircle, ShieldAlert, LogOut } from '@lucide/vue';
+import { CalendarCheck, PlusCircle, ShieldAlert, LogOut, ChevronDown, UserCircle } from '@lucide/vue';
 
 const route = useRoute();
 const router = useRouter();
 const { user, isAdmin, isManager, canManage, logout } = useAuth();
+
+const isDropdownOpen = ref(false);
+const dropdownRef = ref(null);
+
+function handleClickOutside(event) {
+  if (dropdownRef.value && !dropdownRef.value.contains(event.target)) {
+    isDropdownOpen.value = false;
+  }
+}
+
+function handleKeyDown(event) {
+  if (event.key === 'Escape') {
+    isDropdownOpen.value = false;
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside);
+  document.addEventListener('keydown', handleKeyDown);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside);
+  document.removeEventListener('keydown', handleKeyDown);
+});
 
 const roleLabel = computed(() => {
   if (user.value?.role === 'admin') return 'Admin';
@@ -123,7 +214,8 @@ const currentSlug = computed(() => {
   return route.params.slug || (route.path === '/' && myTeams.value.length > 0 ? myTeams.value[0].slug : '');
 });
 
-async function handleLogout() {
+async function handleLogoutClick() {
+  isDropdownOpen.value = false;
   await logout();
   router.push('/login');
 }

@@ -22,6 +22,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config();
 
 const server = Fastify({
+  bodyLimit: 5 * 1024 * 1024, // 5MB body limit for profile photo uploads
   logger: process.env.NODE_ENV !== 'test'
 });
 
