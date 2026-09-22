@@ -11,38 +11,54 @@ import {
   deleteTeam,
   getUserByEmail,
   getQuestionsByTeamId,
+  getQuestionById,
   createQuestion,
   updateQuestion,
   deleteQuestion,
   setTeamQuestions,
-  resetTeamQuestionsToDefaults
+  resetTeamQuestionsToDefaults,
+  getTeamMembers,
+  addTeamMember,
+  updateTeamMemberRole,
+  removeTeamMember,
+  canUserManageTeam
 } from '../db/queries.js';
 
 export default async function adminRoutes(fastify, options) {
-  // Admin-only middleware hook
+  // Admin & Manager middleware hook
   fastify.addHook('preHandler', async (request, reply) => {
     if (!request.session || !request.session.userId) {
       return reply.code(401).send({ error: 'Authentication required' });
     }
 
     const user = await getUserById(request.session.userId);
-    if (!user || user.role !== 'admin') {
-      return reply.code(403).send({ error: 'Admin privileges required' });
+    if (!user) {
+      return reply.code(401).send({ error: 'User not found' });
+    }
+
+    const isManager = user.teams && user.teams.some(t => t.team_role === 'manager');
+    if (user.role !== 'admin' && !isManager) {
+      return reply.code(403).send({ error: 'Admin or manager privileges required' });
     }
 
     request.currentUser = user;
+    request.isAdmin = user.role === 'admin';
   });
 
   // --- USER MANAGEMENT ---
 
-  // 1. List all users with their teams
+  // 1. List all users with their teams (available to admin and manager to select members)
   fastify.get('/users', async (request, reply) => {
     const users = await getAllUsers();
     return { users };
   });
 
-  // 2. Add new user & assign to teams
+  // 2. Add new user & assign to teams (admin only)
   fastify.post('/users', async (request, reply) => {
+    if (!request.isAdmin) {
+      return reply.code(403).send({ error: 'Only administrators can create users' });
+    }
+
     const { email, name, password, role = 'member', team_ids = [] } = request.body || {};
 
     if (!email || !email.trim()) {
@@ -57,19 +73,25 @@ export default async function adminRoutes(fastify, options) {
       return reply.code(409).send({ error: `A user with email "${email}" already exists` });
     }
 
+    const validRole = role === 'admin' ? 'admin' : 'member';
+
     const newUser = await createUser({
       email: email.trim(),
       name: name.trim(),
       password: password && password.trim() ? password.trim() : null,
-      role: role === 'admin' ? 'admin' : 'member',
-      team_ids: Array.isArray(team_ids) ? team_ids.map(Number) : []
+      role: validRole,
+      team_ids: Array.isArray(team_ids) ? team_ids : []
     });
 
     return { ok: true, user: newUser };
   });
 
-  // 3. Update user & assign teams
+  // 3. Update user & assign teams (admin only)
   fastify.put('/users/:id', async (request, reply) => {
+    if (!request.isAdmin) {
+      return reply.code(403).send({ error: 'Only administrators can edit user accounts' });
+    }
+
     const { id } = request.params;
     const userId = Number(id);
     const { name, email, password, role, team_ids } = request.body || {};
@@ -87,7 +109,7 @@ export default async function adminRoutes(fastify, options) {
     }
 
     // Prevent removing the last admin
-    if (existing.role === 'admin' && role === 'member') {
+    if (existing.role === 'admin' && role && role !== 'admin') {
       const allUsers = await getAllUsers();
       const adminCount = allUsers.filter(u => u.role === 'admin').length;
       if (adminCount <= 1) {
@@ -100,14 +122,18 @@ export default async function adminRoutes(fastify, options) {
       email,
       password: password && password.trim() ? password.trim() : undefined,
       role,
-      team_ids: Array.isArray(team_ids) ? team_ids.map(Number) : undefined
+      team_ids: Array.isArray(team_ids) ? team_ids : undefined
     });
 
     return { ok: true, user: updated };
   });
 
-  // 4. Delete user
+  // 4. Delete user (admin only)
   fastify.delete('/users/:id', async (request, reply) => {
+    if (!request.isAdmin) {
+      return reply.code(403).send({ error: 'Only administrators can delete user accounts' });
+    }
+
     const { id } = request.params;
     const userId = Number(id);
 
@@ -126,14 +152,18 @@ export default async function adminRoutes(fastify, options) {
 
   // --- TEAM MANAGEMENT ---
 
-  // List all teams across the company for admin management
+  // List teams (all teams for admin, managed teams for manager)
   fastify.get('/teams', async (request, reply) => {
-    const teams = await getAllTeams();
+    const teams = await getAllTeams(request.currentUser);
     return { teams };
   });
 
-  // 5. Create new team
+  // 5. Create new team (admin only)
   fastify.post('/teams', async (request, reply) => {
+    if (!request.isAdmin) {
+      return reply.code(403).send({ error: 'Only administrators can create teams' });
+    }
+
     const { name, slug, description } = request.body || {};
 
     if (!name || !name.trim()) {
@@ -155,11 +185,16 @@ export default async function adminRoutes(fastify, options) {
     }
   });
 
-  // 6. Update team
+  // 6. Update team (admin or manager of the team)
   fastify.put('/teams/:id', async (request, reply) => {
     const { id } = request.params;
     const teamId = Number(id);
     const { name, description } = request.body || {};
+
+    const canManage = await canUserManageTeam(request.currentUser.id, teamId);
+    if (!canManage) {
+      return reply.code(403).send({ error: 'You do not have permission to edit this team' });
+    }
 
     const updated = await updateTeam(teamId, { name, description });
     if (!updated) {
@@ -169,13 +204,108 @@ export default async function adminRoutes(fastify, options) {
     return { ok: true, team: updated };
   });
 
-  // 7. Delete team
+  // 7. Delete team (admin only - managers may NOT delete teams)
   fastify.delete('/teams/:id', async (request, reply) => {
+    if (!request.isAdmin) {
+      return reply.code(403).send({ error: 'Managers are not permitted to delete teams' });
+    }
+
     const { id } = request.params;
     const teamId = Number(id);
 
     await deleteTeam(teamId);
     return { ok: true, message: 'Team deleted' };
+  });
+
+  // --- TEAM MEMBERS MANAGEMENT ---
+
+  // Get members of a team
+  fastify.get('/teams/:id/members', async (request, reply) => {
+    const { id } = request.params;
+    const teamId = Number(id);
+
+    const canManage = await canUserManageTeam(request.currentUser.id, teamId);
+    if (!canManage) {
+      return reply.code(403).send({ error: 'You do not have permission to view members of this team' });
+    }
+
+    const team = await getTeamById(teamId);
+    if (!team) {
+      return reply.code(404).send({ error: 'Team not found' });
+    }
+
+    const members = await getTeamMembers(teamId);
+    return { members };
+  });
+
+  // Add member to a team (with role: 'member' or 'manager')
+  fastify.post('/teams/:id/members', async (request, reply) => {
+    const { id } = request.params;
+    const teamId = Number(id);
+
+    const canManage = await canUserManageTeam(request.currentUser.id, teamId);
+    if (!canManage) {
+      return reply.code(403).send({ error: 'You do not have permission to add members to this team' });
+    }
+
+    const team = await getTeamById(teamId);
+    if (!team) {
+      return reply.code(404).send({ error: 'Team not found' });
+    }
+
+    const { user_id, role = 'member' } = request.body || {};
+    if (!user_id) {
+      return reply.code(400).send({ error: 'user_id is required' });
+    }
+
+    const validRole = role === 'manager' ? 'manager' : 'member';
+    const members = await addTeamMember(teamId, user_id, validRole);
+    return { ok: true, members };
+  });
+
+  // Update member role within a team ('member' <-> 'manager')
+  fastify.put('/teams/:id/members/:userId', async (request, reply) => {
+    const { id, userId } = request.params;
+    const teamId = Number(id);
+    const targetUserId = Number(userId);
+
+    const canManage = await canUserManageTeam(request.currentUser.id, teamId);
+    if (!canManage) {
+      return reply.code(403).send({ error: 'You do not have permission to manage roles for this team' });
+    }
+
+    const team = await getTeamById(teamId);
+    if (!team) {
+      return reply.code(404).send({ error: 'Team not found' });
+    }
+
+    const { role } = request.body || {};
+    if (!role || !['member', 'manager'].includes(role)) {
+      return reply.code(400).send({ error: 'Role must be either "member" or "manager"' });
+    }
+
+    const members = await updateTeamMemberRole(teamId, targetUserId, role);
+    return { ok: true, members };
+  });
+
+  // Remove member from a team
+  fastify.delete('/teams/:id/members/:userId', async (request, reply) => {
+    const { id, userId } = request.params;
+    const teamId = Number(id);
+    const targetUserId = Number(userId);
+
+    const canManage = await canUserManageTeam(request.currentUser.id, teamId);
+    if (!canManage) {
+      return reply.code(403).send({ error: 'You do not have permission to remove members from this team' });
+    }
+
+    const team = await getTeamById(teamId);
+    if (!team) {
+      return reply.code(404).send({ error: 'Team not found' });
+    }
+
+    const members = await removeTeamMember(teamId, targetUserId);
+    return { ok: true, members };
   });
 
   // --- TEAM QUESTIONS MANAGEMENT ---
@@ -184,6 +314,11 @@ export default async function adminRoutes(fastify, options) {
   fastify.get('/teams/:id/questions', async (request, reply) => {
     const { id } = request.params;
     const teamId = Number(id);
+
+    const canManage = await canUserManageTeam(request.currentUser.id, teamId);
+    if (!canManage) {
+      return reply.code(403).send({ error: 'You do not have permission to manage questions for this team' });
+    }
 
     const team = await getTeamById(teamId);
     if (!team) {
@@ -200,6 +335,11 @@ export default async function adminRoutes(fastify, options) {
     const teamId = Number(id);
     const { text, is_required = true, order_index } = request.body || {};
 
+    const canManage = await canUserManageTeam(request.currentUser.id, teamId);
+    if (!canManage) {
+      return reply.code(403).send({ error: 'You do not have permission to manage questions for this team' });
+    }
+
     if (!text || !text.trim()) {
       return reply.code(400).send({ error: 'Question text is required' });
     }
@@ -215,8 +355,14 @@ export default async function adminRoutes(fastify, options) {
 
   // Update a single question
   fastify.put('/teams/:id/questions/:questionId', async (request, reply) => {
-    const { questionId } = request.params;
+    const { id, questionId } = request.params;
+    const teamId = Number(id);
     const { text, is_required, order_index } = request.body || {};
+
+    const canManage = await canUserManageTeam(request.currentUser.id, teamId);
+    if (!canManage) {
+      return reply.code(403).send({ error: 'You do not have permission to manage questions for this team' });
+    }
 
     const updated = await updateQuestion(Number(questionId), { text, is_required, order_index });
     if (!updated) {
@@ -228,7 +374,14 @@ export default async function adminRoutes(fastify, options) {
 
   // Delete a single question
   fastify.delete('/teams/:id/questions/:questionId', async (request, reply) => {
-    const { questionId } = request.params;
+    const { id, questionId } = request.params;
+    const teamId = Number(id);
+
+    const canManage = await canUserManageTeam(request.currentUser.id, teamId);
+    if (!canManage) {
+      return reply.code(403).send({ error: 'You do not have permission to manage questions for this team' });
+    }
+
     await deleteQuestion(Number(questionId));
     return { ok: true, message: 'Question deleted' };
   });
@@ -238,6 +391,11 @@ export default async function adminRoutes(fastify, options) {
     const { id } = request.params;
     const teamId = Number(id);
     const { questions } = request.body || {};
+
+    const canManage = await canUserManageTeam(request.currentUser.id, teamId);
+    if (!canManage) {
+      return reply.code(403).send({ error: 'You do not have permission to manage questions for this team' });
+    }
 
     if (!Array.isArray(questions)) {
       return reply.code(400).send({ error: 'questions must be an array' });
@@ -256,6 +414,11 @@ export default async function adminRoutes(fastify, options) {
   fastify.post('/teams/:id/questions/reset', async (request, reply) => {
     const { id } = request.params;
     const teamId = Number(id);
+
+    const canManage = await canUserManageTeam(request.currentUser.id, teamId);
+    if (!canManage) {
+      return reply.code(403).send({ error: 'You do not have permission to manage questions for this team' });
+    }
 
     const team = await getTeamById(teamId);
     if (!team) {

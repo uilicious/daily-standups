@@ -6,6 +6,8 @@ const initialized = ref(false);
 
 export function useAuth() {
   const isAdmin = computed(() => user.value?.role === 'admin');
+  const isManager = computed(() => (user.value?.teams || []).some(t => t.team_role === 'manager'));
+  const canManage = computed(() => isAdmin.value || isManager.value);
   const isAuthenticated = computed(() => !!user.value);
   const userTeams = computed(() => user.value?.teams || []);
 
@@ -81,6 +83,8 @@ export function useAuth() {
     loading,
     initialized,
     isAdmin,
+    isManager,
+    canManage,
     isAuthenticated,
     userTeams,
     fetchUser,

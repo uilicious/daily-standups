@@ -99,6 +99,17 @@ export async function initDatabase() {
       table.text('description').nullable();
       table.timestamp('created_at').defaultTo(db.fn.now());
     });
+  } else {
+    const hasManagerId = await db.schema.hasColumn('teams', 'manager_id');
+    if (hasManagerId) {
+      try {
+        await db.schema.alterTable('teams', (table) => {
+          table.dropColumn('manager_id');
+        });
+      } catch (err) {
+        // ignore if database driver does not support dropping column
+      }
+    }
   }
 
   // 3. user_teams junction table
@@ -109,9 +120,17 @@ export async function initDatabase() {
         .references('id').inTable('users').onDelete('CASCADE');
       table.integer('team_id').unsigned().notNullable()
         .references('id').inTable('teams').onDelete('CASCADE');
+      table.string('role').notNullable().defaultTo('member');
       table.timestamp('created_at').defaultTo(db.fn.now());
       table.primary(['user_id', 'team_id']);
     });
+  } else {
+    const hasRole = await db.schema.hasColumn('user_teams', 'role');
+    if (!hasRole) {
+      await db.schema.alterTable('user_teams', (table) => {
+        table.string('role').notNullable().defaultTo('member');
+      });
+    }
   }
 
   // 4. questions table (custom questions per team)

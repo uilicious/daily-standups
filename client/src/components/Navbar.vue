@@ -39,15 +39,15 @@
             <span>Submit Standup</span>
           </router-link>
 
-          <!-- Admin Dashboard Link (Admins Only) -->
+          <!-- Admin / Management Dashboard Link (Admins & Managers) -->
           <router-link
-            v-if="isAdmin"
+            v-if="canManage"
             to="/admin"
             class="px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-1.5"
             :class="$route.path.startsWith('/admin') ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'"
           >
             <ShieldAlert class="w-4 h-4" />
-            <span class="hidden sm:inline">Admin Controls</span>
+            <span class="hidden sm:inline">Admin</span>
           </router-link>
 
           <!-- User Profile & Logout -->
@@ -59,7 +59,7 @@
             />
             <div class="hidden lg:block text-left">
               <p class="text-xs font-semibold text-slate-800 leading-tight">{{ user.name }}</p>
-              <p class="text-[10px] text-slate-500 truncate max-w-[120px]">{{ user.role === 'admin' ? 'Admin' : 'Member' }}</p>
+              <p class="text-[10px] text-slate-500 truncate max-w-[120px]">{{ roleLabel }}</p>
             </div>
             <button
               @click="handleLogout"
@@ -107,7 +107,12 @@ import { CalendarCheck, PlusCircle, ShieldAlert, LogOut } from '@lucide/vue';
 
 const route = useRoute();
 const router = useRouter();
-const { user, isAdmin, logout } = useAuth();
+const { user, isAdmin, isManager, canManage, logout } = useAuth();
+
+const roleLabel = computed(() => {
+  if (user.value?.role === 'admin') return 'Admin';
+  return 'Standard';
+});
 
 // Only display the teams this user actually belongs to
 const myTeams = computed(() => {

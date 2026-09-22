@@ -63,6 +63,8 @@ router.beforeEach(async (to, from, next) => {
 
   const isAuth = !!user.value;
   const isAdmin = user.value?.role === 'admin';
+  const isManager = user.value?.role === 'manager' || (user.value?.teams || []).some(t => t.team_role === 'manager');
+  const canManage = isAdmin || isManager;
 
   if (to.meta.guestOnly && isAuth) {
     return next('/');
@@ -72,7 +74,7 @@ router.beforeEach(async (to, from, next) => {
     return next({ path: '/login', query: { redirect: to.fullPath } });
   }
 
-  if (to.meta.requiresAdmin && !isAdmin) {
+  if (to.meta.requiresAdmin && !canManage) {
     return next('/');
   }
 
