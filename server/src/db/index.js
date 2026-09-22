@@ -131,6 +131,64 @@ export async function initDatabase() {
   }
 
   await seedFromExternalFile();
+  await syncAdminPasswordFromEnv();
+}
+
+export async function syncAdminPasswordFromEnv() {
+  const envPassword = process.env.ADMIN_PASSWORD;
+  if (!envPassword || !envPassword.trim()) {
+    return;
+  }
+
+  const rawPassword = envPassword.trim();
+  const newHash = hashPassword(rawPassword);
+
+  let targetEmail = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.trim().toLowerCase() : null;
+
+  if (!targetEmail) {
+    const seedFilePath = process.env.SEED_FILE || path.join(dbDir, 'seed.json');
+    if (fs.existsSync(seedFilePath)) {
+      try {
+        const raw = fs.readFileSync(seedFilePath, 'utf-8');
+        const seedData = JSON.parse(raw);
+        if (seedData.admin?.email) {
+          targetEmail = seedData.admin.email.trim().toLowerCase();
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+  }
+
+  let adminUser = null;
+  if (targetEmail) {
+    adminUser = await db('users').whereRaw('LOWER(email) = ?', [targetEmail]).first();
+  }
+
+  if (!adminUser) {
+    adminUser = await db('users').where('role', 'admin').first();
+  }
+
+  if (adminUser) {
+    await db('users')
+      .where('id', adminUser.id)
+      .update({
+        password_hash: newHash,
+        role: 'admin'
+      });
+    console.log(`[Auth] Admin password for "${adminUser.email}" was reset from environment (ADMIN_PASSWORD).`);
+  } else {
+    const emailToUse = targetEmail || 'admin@example.com';
+    const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(emailToUse)}`;
+    await db('users').insert({
+      email: emailToUse,
+      name: 'System Administrator',
+      password_hash: newHash,
+      avatar_url: avatar,
+      role: 'admin'
+    });
+    console.log(`[Auth] Admin user "${emailToUse}" created with password from environment (ADMIN_PASSWORD).`);
+  }
 }
 
 export async function seedFromExternalFile() {
@@ -170,7 +228,8 @@ export async function seedFromExternalFile() {
 
   if (userCount === 0 && seedData.admin) {
     const admin = seedData.admin;
-    const passwordHash = admin.password ? hashPassword(admin.password) : null;
+    const initialPassword = process.env.ADMIN_PASSWORD || admin.password;
+    const passwordHash = initialPassword ? hashPassword(initialPassword) : null;
     const avatar = admin.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(admin.name || admin.email)}`;
 
     const insertResult = await db('users').insert({

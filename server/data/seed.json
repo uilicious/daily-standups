@@ -9,11 +9,6 @@
       "name": "Customer Support",
       "slug": "customer-support",
       "description": "User onboarding, ticket resolution, and customer success"
-    },
-    {
-      "name": "Admin Team",
-      "slug": "admin",
-      "description": "Operations, business, finance, and general administration"
     }
   ],
   "admin": {
@@ -21,6 +16,6 @@
     "name": "System Administrator",
     "password": "adminpassword123",
     "role": "admin",
-    "teams": ["admin", "engineering"]
+    "teams": []
   }
 }
