@@ -123,6 +123,64 @@
         </div>
       </div>
 
+      <!-- Team Members Availability Row (No card, small row, left-aligned) -->
+      <div v-if="members.length > 0" class="flex items-center flex-wrap gap-2.5 px-1 py-1">
+        <span class="text-xs font-semibold text-slate-500 flex-shrink-0">Members:</span>
+        <div class="flex items-center flex-wrap gap-2">
+          <div
+            v-for="member in members"
+            :key="member.id"
+            class="relative group"
+            :title="getMemberTitle(member)"
+          >
+            <!-- Avatar with thick green ring if standup submitted -->
+            <div class="relative cursor-pointer transition-transform duration-150 group-hover:scale-110">
+              <img
+                :src="member.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(member.name || member.email)}`"
+                :alt="member.name"
+                class="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover transition-all duration-200 bg-slate-100"
+                :class="[
+                  getMemberOpacityClass(member),
+                  member.has_standup ? 'ring-[3px] ring-emerald-500 ring-offset-2 ring-offset-slate-50' : ''
+                ]"
+              />
+
+              <!-- Half-day AM / PM indicator -->
+              <span
+                v-if="member.is_ooo && member.ooo_period === 'morning'"
+                class="absolute -bottom-1 -right-1 px-1 py-0.2 text-[8px] font-extrabold bg-sky-500 text-white rounded-full leading-none shadow-xs"
+              >
+                AM
+              </span>
+              <span
+                v-else-if="member.is_ooo && member.ooo_period === 'afternoon'"
+                class="absolute -bottom-1 -right-1 px-1 py-0.2 text-[8px] font-extrabold bg-orange-500 text-white rounded-full leading-none shadow-xs"
+              >
+                PM
+              </span>
+            </div>
+
+            <!-- Floating Tooltip on Hover -->
+            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center pointer-events-none z-30 transition-all">
+              <div class="bg-slate-900/95 text-white text-[11px] rounded-lg py-1.5 px-2.5 whitespace-nowrap shadow-xl backdrop-blur-xs text-center min-w-[120px]">
+                <div class="font-bold text-white text-xs">{{ member.name }}</div>
+                <div class="flex items-center justify-center space-x-1.5 mt-1 text-[11px]">
+                  <span class="w-2 h-2 rounded-full inline-block" :class="getStatusDotClass(member)"></span>
+                  <span class="font-medium" :class="getStatusTextClass(member)">{{ getMemberStatusLabel(member) }}</span>
+                </div>
+                <div v-if="member.has_standup" class="text-emerald-400 text-[10px] font-semibold mt-1 flex items-center justify-center space-x-1">
+                  <span>✓ Standup submitted</span>
+                </div>
+                <div v-if="member.ooo_reason" class="text-slate-300 text-[10px] italic mt-1 max-w-[180px] truncate">
+                  "{{ member.ooo_reason }}"
+                </div>
+              </div>
+              <div class="w-2 h-2 bg-slate-900/95 rotate-45 -mt-1"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Standup Cards Feed -->
       <div v-if="filteredStandups.length > 0" class="space-y-4">
         <StandupCard
@@ -177,6 +235,7 @@ const { user, userTeams } = useAuth();
 
 const team = ref(null);
 const standups = ref([]);
+const members = ref([]);
 const loading = ref(true);
 const error = ref(null);
 const accessDenied = ref(false);
@@ -252,6 +311,7 @@ async function fetchStandups() {
     const data = await res.json();
     team.value = data.team;
     standups.value = data.standups || [];
+    members.value = data.members || [];
   } catch (err) {
     error.value = err.message;
   } finally {
@@ -287,6 +347,65 @@ function handleEditStandup(standup) {
       date: standup.date
     }
   });
+}
+
+// Member Availability Helpers
+function getMemberOpacityClass(member) {
+  // If not scheduled or out of office all day -> grayed out
+  if (!member.is_scheduled || (member.is_ooo && member.ooo_period === 'all_day')) {
+    return 'grayscale opacity-35';
+  }
+  // If out of office for half-day (morning or afternoon) -> slightly muted with AM/PM indicator
+  if (member.is_ooo && (member.ooo_period === 'morning' || member.ooo_period === 'afternoon')) {
+    return 'opacity-85';
+  }
+  // Fully in office
+  return 'opacity-100';
+}
+
+function getMemberStatusLabel(member) {
+  if (member.is_ooo) {
+    if (member.ooo_period === 'morning') return 'Out of office (Morning)';
+    if (member.ooo_period === 'afternoon') return 'Out of office (Afternoon)';
+    return 'Out of office';
+  }
+  if (!member.is_scheduled) {
+    return 'Out of office (Scheduled off)';
+  }
+  return 'In office';
+}
+
+function getStatusDotClass(member) {
+  if (member.is_ooo) {
+    if (member.ooo_period === 'morning' || member.ooo_period === 'afternoon') {
+      return 'bg-amber-400';
+    }
+    return 'bg-rose-400';
+  }
+  if (!member.is_scheduled) {
+    return 'bg-slate-400';
+  }
+  return 'bg-emerald-400';
+}
+
+function getStatusTextClass(member) {
+  if (member.is_ooo) {
+    if (member.ooo_period === 'morning' || member.ooo_period === 'afternoon') {
+      return 'text-amber-300';
+    }
+    return 'text-rose-300';
+  }
+  if (!member.is_scheduled) {
+    return 'text-slate-300';
+  }
+  return 'text-emerald-300';
+}
+
+function getMemberTitle(member) {
+  const status = getMemberStatusLabel(member);
+  const standup = member.has_standup ? ' • Standup submitted' : '';
+  const reason = member.ooo_reason ? ` (${member.ooo_reason})` : '';
+  return `${member.name} - ${status}${reason}${standup}`;
 }
 
 // Watch for route param change (switching between teams)

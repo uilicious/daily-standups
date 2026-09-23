@@ -39,6 +39,17 @@
             <span>Submit Standup</span>
           </router-link>
 
+          <!-- My Schedule Link -->
+          <router-link
+            v-if="user"
+            to="/schedule"
+            class="px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-1.5"
+            :class="$route.path === '/schedule' ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'"
+          >
+            <CalendarClock class="w-4 h-4" />
+            <span class="hidden sm:inline">My Schedule</span>
+          </router-link>
+
           <!-- Admin / Management Dashboard Link (Admins & Managers) -->
           <router-link
             v-if="canManage"
@@ -112,6 +123,15 @@
                   </router-link>
 
                   <router-link
+                    to="/schedule"
+                    @click="isDropdownOpen = false"
+                    class="flex items-center space-x-2.5 px-3.5 py-2 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition font-medium"
+                  >
+                    <CalendarClock class="w-4 h-4 text-slate-400" />
+                    <span>My Schedule</span>
+                  </router-link>
+
+                  <router-link
                     v-if="canManage"
                     to="/admin"
                     @click="isDropdownOpen = false"
@@ -169,7 +189,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '@/composables/useAuth.js';
-import { CalendarCheck, PlusCircle, ShieldAlert, LogOut, ChevronDown, UserCircle } from '@lucide/vue';
+import { CalendarCheck, CalendarClock, PlusCircle, ShieldAlert, LogOut, ChevronDown, UserCircle } from '@lucide/vue';
 
 const route = useRoute();
 const router = useRouter();

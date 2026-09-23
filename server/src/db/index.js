@@ -187,6 +187,37 @@ export async function initDatabase() {
     });
   }
 
+  // 7. user_work_schedules table (weekly working days)
+  const hasUserSchedules = await db.schema.hasTable('user_work_schedules');
+  if (!hasUserSchedules) {
+    await db.schema.createTable('user_work_schedules', (table) => {
+      table.integer('user_id').unsigned().primary()
+        .references('id').inTable('users').onDelete('CASCADE');
+      table.text('work_days').notNullable().defaultTo('[1,2,3,4,5]');
+      table.timestamp('created_at').defaultTo(db.fn.now());
+      table.timestamp('updated_at').defaultTo(db.fn.now());
+    });
+  }
+
+  // 8. user_ooo_entries table (out of office entries, single or multi-date)
+  const hasUserOooEntries = await db.schema.hasTable('user_ooo_entries');
+  if (!hasUserOooEntries) {
+    await db.schema.createTable('user_ooo_entries', (table) => {
+      table.increments('id').primary();
+      table.integer('user_id').unsigned().notNullable()
+        .references('id').inTable('users').onDelete('CASCADE');
+      table.string('start_date', 10).notNullable(); // YYYY-MM-DD
+      table.string('end_date', 10).notNullable();   // YYYY-MM-DD
+      table.string('period', 20).notNullable().defaultTo('all_day'); // all_day, morning, afternoon
+      table.text('reason').nullable();
+      table.timestamp('created_at').defaultTo(db.fn.now());
+      table.timestamp('updated_at').defaultTo(db.fn.now());
+
+      table.index(['user_id', 'start_date', 'end_date']);
+      table.index(['start_date', 'end_date']);
+    });
+  }
+
   await seedFromExternalFile();
   await ensureQuestionsForExistingTeams();
   await migrateLegacyStandupAnswers();

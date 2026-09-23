@@ -23,6 +23,25 @@
       <span class="font-medium">{{ errorMessage }}</span>
     </div>
 
+    <!-- Schedule & Availability Quick Link -->
+    <div class="mb-8 p-4 sm:p-5 rounded-3xl bg-indigo-50/50 border border-indigo-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="p-2.5 rounded-2xl bg-indigo-600 text-white">
+          <CalendarClock class="w-5 h-5" />
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-slate-900">Work Schedule & Availability</h3>
+          <p class="text-xs text-slate-500">Manage your working days and schedule out-of-office days.</p>
+        </div>
+      </div>
+      <router-link
+        to="/schedule"
+        class="inline-flex items-center justify-center space-x-1.5 px-4 py-2 rounded-xl bg-white border border-indigo-200 text-indigo-600 text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-300 transition shadow-sm"
+      >
+        <span>Open My Schedule</span>
+      </router-link>
+    </div>
+
     <form @submit.prevent="handleSubmit" class="space-y-8">
       <!-- Section 1: Display Photo / Avatar -->
       <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8">
@@ -367,6 +386,7 @@ import { useAuth } from '@/composables/useAuth.js';
 import { ANIMAL_AVATARS } from '@/utils/animalAvatars.js';
 import {
   Camera,
+  CalendarClock,
   UserCircle,
   KeyRound,
   Check,

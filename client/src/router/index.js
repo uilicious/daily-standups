@@ -7,6 +7,7 @@ import AdminView from '@/views/AdminView.vue';
 import LoginView from '@/views/LoginView.vue';
 import NoTeamsView from '@/views/NoTeamsView.vue';
 import ProfileView from '@/views/ProfileView.vue';
+import ScheduleView from '@/views/ScheduleView.vue';
 
 const routes = [
   {
@@ -30,6 +31,12 @@ const routes = [
     path: '/profile',
     name: 'Profile',
     component: ProfileView,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/schedule',
+    name: 'Schedule',
+    component: ScheduleView,
     meta: { requiresAuth: true }
   },
   {
