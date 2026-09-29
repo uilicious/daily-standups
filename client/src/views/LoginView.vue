@@ -57,7 +57,7 @@
               v-model="email"
               required
               autocomplete="email"
-              placeholder="admin@example.com"
+              placeholder="name@company.com"
               class="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
@@ -83,23 +83,6 @@
             <span>{{ loading ? 'Signing in...' : 'Sign In' }}</span>
           </button>
         </form>
-
-        <!-- Initial Admin Credentials Notice -->
-        <div class="pt-4 border-t border-slate-100 bg-slate-50 -mx-4 -mb-4 sm:-mx-10 sm:-mb-10 p-4 rounded-b-2xl">
-          <div class="flex items-center justify-between text-xs">
-            <div>
-              <p class="font-semibold text-slate-700">Initial Admin Credentials:</p>
-              <p class="text-slate-500 font-mono text-[11px]">admin@example.com / adminpassword123</p>
-            </div>
-            <button
-              @click="quickFillAdmin"
-              type="button"
-              class="px-2.5 py-1 text-xs font-semibold text-indigo-600 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-50 transition"
-            >
-              Quick Fill
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -121,11 +104,6 @@ const loading = ref(false);
 const googleLoading = ref(false);
 const errorMessage = ref('');
 const googleConfigMessage = ref('');
-
-function quickFillAdmin() {
-  email.value = 'admin@example.com';
-  password.value = 'adminpassword123';
-}
 
 async function handlePasswordLogin() {
   errorMessage.value = '';
