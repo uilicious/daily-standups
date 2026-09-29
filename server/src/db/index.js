@@ -218,6 +218,44 @@ export async function initDatabase() {
     });
   }
 
+  // 9. org_settings table (key-value configuration)
+  const hasOrgSettings = await db.schema.hasTable('org_settings');
+  if (!hasOrgSettings) {
+    await db.schema.createTable('org_settings', (table) => {
+      table.string('key').primary();
+      table.text('value').notNullable();
+      table.timestamp('updated_at').defaultTo(db.fn.now());
+    });
+
+    await db('org_settings').insert({
+      key: 'org_work_days',
+      value: JSON.stringify([1, 2, 3, 4, 5])
+    });
+  }
+
+  // 10. team_posts table (standard posts and hand-off updates)
+  const hasTeamPosts = await db.schema.hasTable('team_posts');
+  if (!hasTeamPosts) {
+    await db.schema.createTable('team_posts', (table) => {
+      table.increments('id').primary();
+      table.integer('team_id').unsigned().notNullable()
+        .references('id').inTable('teams').onDelete('CASCADE');
+      table.integer('user_id').unsigned().notNullable()
+        .references('id').inTable('users').onDelete('CASCADE');
+      table.string('title').nullable();
+      table.text('content').notNullable();
+      table.string('post_type', 20).notNullable().defaultTo('standard'); // 'standard' | 'handoff'
+      table.string('date', 10).notNullable(); // YYYY-MM-DD (date posted)
+      table.string('target_date', 10).nullable(); // YYYY-MM-DD (target date for handoffs)
+      table.timestamp('created_at').defaultTo(db.fn.now());
+      table.timestamp('updated_at').defaultTo(db.fn.now());
+
+      table.index(['team_id', 'date']);
+      table.index(['team_id', 'target_date']);
+      table.index(['user_id', 'date']);
+    });
+  }
+
   await seedFromExternalFile();
   await ensureQuestionsForExistingTeams();
   await migrateLegacyStandupAnswers();

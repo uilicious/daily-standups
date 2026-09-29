@@ -4,7 +4,10 @@ import {
   getStandupsByTeamAndDate,
   getUserById,
   getQuestionsByTeamId,
-  getTeamMembersWithAvailability
+  getTeamMembersWithAvailability,
+  getPostsForTeamFeed,
+  createTeamPost,
+  getOrgWorkDays
 } from '../db/queries.js';
 
 export default async function teamRoutes(fastify, options) {
@@ -107,13 +110,55 @@ export default async function teamRoutes(fastify, options) {
     const queryDate = date || new Date().toISOString().split('T')[0];
     const standups = await getStandupsByTeamAndDate(team.id, queryDate);
     const members = await getTeamMembersWithAvailability(team.id, queryDate);
+    const posts = await getPostsForTeamFeed(team.id, queryDate);
+    const orgWorkDays = await getOrgWorkDays();
 
     return {
       team,
       date: queryDate,
       standups,
-      members
+      members,
+      posts,
+      org_work_days: orgWorkDays
     };
+  });
+
+  // Create a new post (standard or handoff) for team
+  fastify.post('/:idOrSlug/posts', async (request, reply) => {
+    const user = await getAuthenticatedUser(request, reply);
+    if (!user) return;
+
+    const { idOrSlug } = request.params;
+    let team = isNaN(idOrSlug) ? await getTeamBySlug(idOrSlug) : await getTeamById(Number(idOrSlug));
+    if (!team) {
+      team = await getTeamBySlug(idOrSlug);
+    }
+
+    if (!team) {
+      return reply.code(404).send({ error: 'Team not found' });
+    }
+
+    const isMember = (user.teams || []).some(t => t.id === team.id);
+    if (!isMember && user.role !== 'admin') {
+      return reply.code(403).send({ error: 'Access denied. You do not belong to this team.' });
+    }
+
+    const { title, content, post_type, date, target_date } = request.body || {};
+    if (!content || !content.trim()) {
+      return reply.code(400).send({ error: 'Content is required' });
+    }
+
+    const createdPost = await createTeamPost({
+      teamId: team.id,
+      userId: user.id,
+      postType: post_type || 'standard',
+      title,
+      content,
+      date: date || new Date().toISOString().split('T')[0],
+      targetDate: target_date || null
+    });
+
+    return reply.code(201).send({ post: createdPost });
   });
 
   // Get members with availability for team on date (only if member)

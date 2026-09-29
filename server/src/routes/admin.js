@@ -21,7 +21,9 @@ import {
   addTeamMember,
   updateTeamMemberRole,
   removeTeamMember,
-  canUserManageTeam
+  canUserManageTeam,
+  getOrgWorkDays,
+  setOrgWorkDays
 } from '../db/queries.js';
 
 export default async function adminRoutes(fastify, options) {
@@ -427,5 +429,33 @@ export default async function adminRoutes(fastify, options) {
 
     const questions = await resetTeamQuestionsToDefaults(teamId);
     return { ok: true, questions };
+  });
+
+  // --- ORGANIZATION SETTINGS (Admin Only) ---
+
+  // Get org settings (e.g. working days)
+  fastify.get('/settings', async (request, reply) => {
+    const orgWorkDays = await getOrgWorkDays();
+    return {
+      org_work_days: orgWorkDays
+    };
+  });
+
+  // Update org working days
+  fastify.put('/settings/workdays', async (request, reply) => {
+    if (!request.isAdmin) {
+      return reply.code(403).send({ error: 'Only administrators can update organization settings' });
+    }
+
+    const { work_days } = request.body || {};
+    if (!Array.isArray(work_days)) {
+      return reply.code(400).send({ error: 'work_days must be an array of numbers' });
+    }
+
+    const updated = await setOrgWorkDays(work_days);
+    return {
+      ok: true,
+      org_work_days: updated
+    };
   });
 }

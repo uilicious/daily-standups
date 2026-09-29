@@ -28,6 +28,13 @@
         >
           Teams ({{ teams.length }})
         </button>
+        <button
+          @click="activeTab = 'settings'"
+          class="px-4 py-1.5 rounded-lg text-sm font-semibold transition"
+          :class="activeTab === 'settings' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+        >
+          Organization
+        </button>
       </div>
     </div>
 
@@ -271,6 +278,82 @@
                 <span>Questions</span>
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: ORGANIZATION SETTINGS (Admin Only) -->
+    <div v-if="activeTab === 'settings' && isAdmin" class="space-y-6">
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs">
+        <div class="flex items-start justify-between pb-6 border-b border-slate-100 mb-6">
+          <div class="flex items-center space-x-3.5">
+            <div class="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+              <Building2 class="w-6 h-6" />
+            </div>
+            <div>
+              <h2 class="text-lg font-bold text-slate-900">Organization Work Schedule</h2>
+              <p class="text-xs text-slate-500 mt-0.5">
+                Configure standard company working days. Feed date navigation will skip non-working days and hand-off posts will target the next working day.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Weekly Days Grid (Mon-Sun) -->
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Working Days
+            </label>
+            <div class="flex items-center space-x-2">
+              <button
+                type="button"
+                @click="setOrgWorkDaysPreset([1, 2, 3, 4, 5])"
+                class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 px-2 py-1 rounded-lg hover:bg-indigo-50 transition"
+              >
+                Mon–Fri
+              </button>
+              <button
+                type="button"
+                @click="setOrgWorkDaysPreset([1, 2, 3, 4, 5, 6, 7])"
+                class="text-xs font-semibold text-slate-600 hover:text-slate-800 px-2 py-1 rounded-lg hover:bg-slate-100 transition"
+              >
+                All 7 Days
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
+            <button
+              v-for="day in WEEKDAYS"
+              :key="day.id"
+              type="button"
+              @click="toggleOrgWorkDay(day.id)"
+              class="flex flex-col items-center justify-center p-4 rounded-2xl border transition-all text-center cursor-pointer"
+              :class="orgWorkDays.includes(day.id) ? 'border-indigo-600 bg-indigo-50/70 text-indigo-900 shadow-2xs font-semibold' : 'border-slate-200 bg-slate-50/50 text-slate-400 hover:border-slate-300'"
+            >
+              <span class="text-xs uppercase tracking-wider font-bold mb-1">{{ day.short }}</span>
+              <span class="text-sm">{{ day.name }}</span>
+              <span
+                class="mt-2 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider"
+                :class="orgWorkDays.includes(day.id) ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'"
+              >
+                {{ orgWorkDays.includes(day.id) ? 'Working' : 'Off' }}
+              </span>
+            </button>
+          </div>
+
+          <div class="pt-4 flex items-center justify-end">
+            <button
+              @click="saveOrgWorkDays"
+              :disabled="savingOrgSettings || orgWorkDays.length === 0"
+              class="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition shadow-sm disabled:opacity-50 cursor-pointer"
+            >
+              <Loader2 v-if="savingOrgSettings" class="w-4 h-4 animate-spin" />
+              <Save v-else class="w-4 h-4" />
+              <span>Save Work Schedule</span>
+            </button>
           </div>
         </div>
       </div>
@@ -784,8 +867,11 @@ import {
   X,
   Pencil,
   ListChecks,
-  ArrowUpRight
+  ArrowUpRight,
+  Building2,
+  Save
 } from '@lucide/vue';
+import { WEEKDAYS } from '@/utils/schedule.js';
 
 const { user: currentUser, isAdmin, isManager, canManage } = useAuth();
 
@@ -1270,10 +1356,69 @@ async function saveQuestions() {
   }
 }
 
+// Organization Settings State & Methods
+const orgWorkDays = ref([1, 2, 3, 4, 5]);
+const savingOrgSettings = ref(false);
+
+async function fetchOrgSettings() {
+  if (!isAdmin.value) return;
+  try {
+    const res = await fetch('/api/admin/settings', { credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.org_work_days)) {
+        orgWorkDays.value = data.org_work_days;
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load org settings:', err);
+  }
+}
+
+function toggleOrgWorkDay(dayId) {
+  if (orgWorkDays.value.includes(dayId)) {
+    if (orgWorkDays.value.length === 1) {
+      showAlert('At least one working day must be selected', 'error');
+      return;
+    }
+    orgWorkDays.value = orgWorkDays.value.filter(d => d !== dayId);
+  } else {
+    orgWorkDays.value = [...orgWorkDays.value, dayId].sort((a, b) => a - b);
+  }
+}
+
+function setOrgWorkDaysPreset(preset) {
+  orgWorkDays.value = [...preset];
+}
+
+async function saveOrgWorkDays() {
+  savingOrgSettings.value = true;
+  try {
+    const res = await fetch('/api/admin/settings/workdays', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ work_days: orgWorkDays.value })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update organization settings');
+    }
+    const data = await res.json();
+    orgWorkDays.value = data.org_work_days;
+    showAlert('Organization work schedule updated successfully!', 'success');
+  } catch (err) {
+    showAlert(err.message, 'error');
+  } finally {
+    savingOrgSettings.value = false;
+  }
+}
+
 onMounted(() => {
   if (!isAdmin.value) {
     activeTab.value = 'teams';
   }
   loadData();
+  fetchOrgSettings();
 });
 </script>

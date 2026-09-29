@@ -60,3 +60,46 @@ export function isEntryToday(item, todayStr = getLocalDateString()) {
   const end = item.end_date || item.start_date || item.date;
   return !!(start && end && start <= todayStr && end >= todayStr);
 }
+
+export function isWorkingDay(dateStr, workDays = [1, 2, 3, 4, 5]) {
+  if (!dateStr) return false;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const jsDay = dt.getDay();
+  const isoDay = jsDay === 0 ? 7 : jsDay;
+  return workDays.includes(isoDay);
+}
+
+export function calculateNextWorkingDay(dateStr, workDays = [1, 2, 3, 4, 5]) {
+  if (!workDays || workDays.length === 0) workDays = [1, 2, 3, 4, 5];
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+
+  for (let i = 1; i <= 7; i++) {
+    dt.setDate(dt.getDate() + 1);
+    const jsDay = dt.getDay();
+    const isoDay = jsDay === 0 ? 7 : jsDay;
+    if (workDays.includes(isoDay)) {
+      return getLocalDateString(dt);
+    }
+  }
+  dt.setDate(dt.getDate() + 1);
+  return getLocalDateString(dt);
+}
+
+export function calculatePreviousWorkingDay(dateStr, workDays = [1, 2, 3, 4, 5]) {
+  if (!workDays || workDays.length === 0) workDays = [1, 2, 3, 4, 5];
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+
+  for (let i = 1; i <= 7; i++) {
+    dt.setDate(dt.getDate() - 1);
+    const jsDay = dt.getDay();
+    const isoDay = jsDay === 0 ? 7 : jsDay;
+    if (workDays.includes(isoDay)) {
+      return getLocalDateString(dt);
+    }
+  }
+  dt.setDate(dt.getDate() - 1);
+  return getLocalDateString(dt);
+}

@@ -14,6 +14,7 @@ import teamRoutes from './routes/teams.js';
 import standupRoutes from './routes/standups.js';
 import adminRoutes from './routes/admin.js';
 import scheduleRoutes from './routes/schedule.js';
+import postRoutes from './routes/posts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,6 +68,7 @@ await server.register(teamRoutes, { prefix: '/api/teams' });
 await server.register(standupRoutes, { prefix: '/api/standups' });
 await server.register(adminRoutes, { prefix: '/api/admin' });
 await server.register(scheduleRoutes, { prefix: '/api/schedule' });
+await server.register(postRoutes, { prefix: '/api/posts' });
 
 // Serve static frontend in production or if client/dist exists
 const clientDistPath = path.resolve(__dirname, '../../client/dist');
