@@ -63,7 +63,58 @@ cd server
 npm start
 ```
 
-## Initial Credentials
-Initial teams and admin user are loaded from `server/data/seed.json`:
-- **Admin Email:** `admin@example.com`
-- **Password:** `adminpassword123`
+## Initial Credentials & Configuration
+Initial teams and admin user are seeded on first launch:
+- **Default Admin Email:** `admin@example.com`
+- **Default Admin Password:** `adminpassword123`
+
+> **Note for Production:** In production, specify `ADMIN_EMAIL` and `ADMIN_PASSWORD` in your environment or `.env` file. When `ADMIN_PASSWORD` is supplied, the server automatically synchronizes the admin account's password on startup.
+
+## Docker Deployment (DevOps)
+
+### 1. Build the Docker Image
+```bash
+docker build -t daily-standups .
+```
+
+### 2. Run with SQLite (Default)
+Mount a Docker volume to `/app/server/data` to persist your SQLite database across restarts:
+```bash
+docker run -d \
+  --name daily-standups \
+  -p 3000:3000 \
+  -v daily_standups_data:/app/server/data \
+  -e SESSION_SECRET="your-strong-random-secret-key-at-least-32-chars" \
+  -e ADMIN_PASSWORD="your-secure-admin-password" \
+  daily-standups
+```
+
+### 3. Run with PostgreSQL or MySQL
+Provide your database connection via environment variables:
+```bash
+# PostgreSQL example
+docker run -d \
+  --name daily-standups \
+  -p 3000:3000 \
+  -e DB_CLIENT=pg \
+  -e DATABASE_URL="postgres://user:password@postgres-host:5432/daily_standups" \
+  -e SESSION_SECRET="your-strong-random-secret-key-at-least-32-chars" \
+  -e ADMIN_PASSWORD="your-secure-admin-password" \
+  daily-standups
+```
+
+### 4. Health Check
+The container exposes a health check endpoint at `/api/health`. Docker will report container health automatically:
+```bash
+docker inspect --format='{{json .State.Health.Status}}' daily-standups
+```
+
+## Documentation
+
+For more detailed guides and architecture references, consult the documentation:
+
+- [**Architecture Overview**](docs/architecture.md): System design, Knex multi-database layer (SQLite, PostgreSQL, MySQL), database schema, and security model.
+- [**Features & Modules**](docs/features.md): Details on customizable team questions, team posts & hand-off updates, avatars & profile photo uploads, role-based access control (RBAC), and markdown formatting.
+- [**Deployment Guide**](docs/deployment.md): Complete guide to Docker deployments, environment variables reference, volume persistence, and database setups.
+- [**Changelog**](CHANGELOG.md): Record of notable updates and release notes.
+
