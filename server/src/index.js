@@ -25,7 +25,8 @@ dotenv.config();
 
 const server = Fastify({
   bodyLimit: 5 * 1024 * 1024, // 5MB body limit for profile photo uploads
-  logger: process.env.NODE_ENV !== 'test'
+  logger: process.env.NODE_ENV !== 'test',
+  trustProxy: true
 });
 
 // Initialize database
@@ -49,7 +50,7 @@ await server.register(fastifySession, {
   secret: process.env.SESSION_SECRET || 'a-very-secure-standup-session-key-minimum-32-chars-long!',
   cookieName: 'standup_sid',
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: 'auto',
     httpOnly: true,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     sameSite: 'lax',
