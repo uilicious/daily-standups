@@ -3,7 +3,24 @@ import { hashPassword } from '../../utils/auth.js';
 
 export async function getUserById(id) {
   const user = await db('users')
-    .select('id', 'email', 'name', 'avatar_url', 'role', 'created_at')
+    .select('id', 'username', 'email', 'name', 'avatar_url', 'role', 'created_at')
+    .where('id', id)
+    .first();
+
+  if (!user) return null;
+
+  user.teams = await db('teams as t')
+    .join('user_teams as ut', 'ut.team_id', 't.id')
+    .where('ut.user_id', id)
+    .select('t.id', 't.name', 't.slug', 't.description', 'ut.role as team_role')
+    .orderBy('t.name', 'asc');
+
+  return user;
+}
+
+export async function getUserByIdWithPassword(id) {
+  const user = await db('users')
+    .select('id', 'username', 'email', 'name', 'password_hash', 'avatar_url', 'role', 'created_at')
     .where('id', id)
     .first();
 
@@ -19,8 +36,9 @@ export async function getUserById(id) {
 }
 
 export async function getUserByEmail(email) {
+  if (!email) return null;
   const user = await db('users')
-    .select('id', 'email', 'name', 'avatar_url', 'role', 'created_at')
+    .select('id', 'username', 'email', 'name', 'avatar_url', 'role', 'created_at')
     .whereRaw('LOWER(email) = ?', [email.trim().toLowerCase()])
     .first();
 
@@ -35,10 +53,69 @@ export async function getUserByEmail(email) {
   return user;
 }
 
-export async function getUserByEmailWithPassword(email) {
+export async function getUserByUsername(username) {
+  if (!username) return null;
   const user = await db('users')
-    .select('id', 'email', 'name', 'password_hash', 'avatar_url', 'role', 'created_at')
+    .select('id', 'username', 'email', 'name', 'avatar_url', 'role', 'created_at')
+    .whereRaw('LOWER(username) = ?', [username.trim().toLowerCase()])
+    .first();
+
+  if (!user) return null;
+
+  user.teams = await db('teams as t')
+    .join('user_teams as ut', 'ut.team_id', 't.id')
+    .where('ut.user_id', user.id)
+    .select('t.id', 't.name', 't.slug', 't.description', 'ut.role as team_role')
+    .orderBy('t.name', 'asc');
+
+  return user;
+}
+
+export async function getUserByIdentifier(identifier) {
+  if (!identifier) return null;
+  const clean = identifier.trim().toLowerCase();
+  const user = await db('users')
+    .select('id', 'username', 'email', 'name', 'avatar_url', 'role', 'created_at')
+    .whereRaw('LOWER(username) = ?', [clean])
+    .orWhereRaw('LOWER(email) = ?', [clean])
+    .first();
+
+  if (!user) return null;
+
+  user.teams = await db('teams as t')
+    .join('user_teams as ut', 'ut.team_id', 't.id')
+    .where('ut.user_id', user.id)
+    .select('t.id', 't.name', 't.slug', 't.description', 'ut.role as team_role')
+    .orderBy('t.name', 'asc');
+
+  return user;
+}
+
+export async function getUserByEmailWithPassword(email) {
+  if (!email) return null;
+  const user = await db('users')
+    .select('id', 'username', 'email', 'name', 'password_hash', 'avatar_url', 'role', 'created_at')
     .whereRaw('LOWER(email) = ?', [email.trim().toLowerCase()])
+    .first();
+
+  if (!user) return null;
+
+  user.teams = await db('teams as t')
+    .join('user_teams as ut', 'ut.team_id', 't.id')
+    .where('ut.user_id', user.id)
+    .select('t.id', 't.name', 't.slug', 't.description', 'ut.role as team_role')
+    .orderBy('t.name', 'asc');
+
+  return user;
+}
+
+export async function getUserByIdentifierWithPassword(identifier) {
+  if (!identifier) return null;
+  const clean = identifier.trim().toLowerCase();
+  const user = await db('users')
+    .select('id', 'username', 'email', 'name', 'password_hash', 'avatar_url', 'role', 'created_at')
+    .whereRaw('LOWER(username) = ?', [clean])
+    .orWhereRaw('LOWER(email) = ?', [clean])
     .first();
 
   if (!user) return null;
@@ -54,7 +131,7 @@ export async function getUserByEmailWithPassword(email) {
 
 export async function getAllUsers() {
   const users = await db('users')
-    .select('id', 'email', 'name', 'avatar_url', 'role', 'created_at')
+    .select('id', 'username', 'email', 'name', 'avatar_url', 'role', 'created_at')
     .orderBy('name', 'asc');
 
   for (const user of users) {
@@ -68,13 +145,16 @@ export async function getAllUsers() {
   return users;
 }
 
-export async function createUser({ email, name, password, avatar_url, role = 'member', team_ids = [] }) {
-  const avatar = avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name || email)}`;
+export async function createUser({ username, email, name, password, avatar_url, role = 'member', team_ids = [] }) {
+  const cleanUsername = username ? username.trim().toLowerCase() : '';
+  const cleanEmail = email && email.trim() ? email.trim().toLowerCase() : null;
+  const avatar = avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name || cleanUsername || cleanEmail || 'User')}`;
   const passwordHash = password ? hashPassword(password) : null;
   const validRole = role === 'admin' ? 'admin' : 'member';
 
   const insertResult = await db('users').insert({
-    email: email.trim().toLowerCase(),
+    username: cleanUsername,
+    email: cleanEmail,
     name: name.trim(),
     password_hash: passwordHash,
     avatar_url: avatar,
@@ -105,7 +185,9 @@ export async function createUser({ email, name, password, avatar_url, role = 'me
 export async function updateUser(id, { name, email, password, role, avatar_url, team_ids }) {
   const updates = {};
   if (name !== undefined) updates.name = name.trim();
-  if (email !== undefined) updates.email = email.trim().toLowerCase();
+  if (email !== undefined) {
+    updates.email = email && email.trim() ? email.trim().toLowerCase() : null;
+  }
   if (password) updates.password_hash = hashPassword(password);
   if (role !== undefined) updates.role = role === 'admin' ? 'admin' : 'member';
   if (avatar_url !== undefined) updates.avatar_url = avatar_url;

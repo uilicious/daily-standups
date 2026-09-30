@@ -1,18 +1,28 @@
-import { getUserByEmailWithPassword, getUserById, getUserByEmail, createUser, updateUser } from '../db/queries.js';
+import {
+  getUserById,
+  getUserByIdWithPassword,
+  getUserByEmail,
+  getUserByUsername,
+  getUserByIdentifier,
+  getUserByIdentifierWithPassword,
+  createUser,
+  updateUser
+} from '../db/queries.js';
 import { verifyPassword } from '../utils/auth.js';
 
 export default async function authRoutes(fastify, options) {
-  // 1. Password Login
+  // 1. Password Login (Accepts username or email)
   fastify.post('/login', async (request, reply) => {
-    const { email, password } = request.body || {};
+    const { email, username, identifier, password } = request.body || {};
+    const loginId = (identifier || username || email || '').trim();
 
-    if (!email || !password) {
-      return reply.code(400).send({ error: 'Email and password are required' });
+    if (!loginId || !password) {
+      return reply.code(400).send({ error: 'Username or email and password are required' });
     }
 
-    const user = await getUserByEmailWithPassword(email);
+    const user = await getUserByIdentifierWithPassword(loginId);
     if (!user) {
-      return reply.code(401).send({ error: 'Invalid email or password' });
+      return reply.code(401).send({ error: 'Invalid username/email or password' });
     }
 
     if (!user.password_hash) {
@@ -21,7 +31,7 @@ export default async function authRoutes(fastify, options) {
 
     const isValid = verifyPassword(password, user.password_hash);
     if (!isValid) {
-      return reply.code(401).send({ error: 'Invalid email or password' });
+      return reply.code(401).send({ error: 'Invalid username/email or password' });
     }
 
     request.session.userId = user.id;
@@ -44,7 +54,7 @@ export default async function authRoutes(fastify, options) {
       return reply.code(401).send({ error: 'User no longer exists' });
     }
 
-    const fullUser = await getUserByEmailWithPassword(user.email);
+    const fullUser = await getUserByIdWithPassword(user.id);
     user.has_password = Boolean(fullUser?.password_hash);
 
     return { user };
@@ -129,7 +139,14 @@ export default async function authRoutes(fastify, options) {
         // If ALLOW_AUTO_SIGNUP is true, create user as member; otherwise check if admin configured
         const allowAutoSignup = process.env.ALLOW_AUTO_SIGNUP === 'true';
         if (allowAutoSignup) {
+          let baseUsername = (profile.email.split('@')[0] || profile.name || 'user').toLowerCase().replace(/[^a-z0-9_]/g, '');
+          let candidateUsername = baseUsername || 'user';
+          let count = 1;
+          while (await getUserByUsername(candidateUsername)) {
+            candidateUsername = `${baseUsername}${count++}`;
+          }
           user = await createUser({
+            username: candidateUsername,
             email: profile.email,
             name: profile.name || profile.email.split('@')[0],
             avatar_url: profile.picture,
@@ -156,18 +173,19 @@ export default async function authRoutes(fastify, options) {
       return reply.code(403).send({ error: 'Dev login is disabled in production' });
     }
 
-    const { email } = request.body || {};
-    if (!email) {
-      return reply.code(400).send({ error: 'Email is required' });
+    const { email, username, identifier } = request.body || {};
+    const loginId = (identifier || username || email || '').trim();
+    if (!loginId) {
+      return reply.code(400).send({ error: 'Username or email is required' });
     }
 
-    const user = await getUserByEmail(email);
+    const user = await getUserByIdentifier(loginId);
     if (!user) {
-      return reply.code(404).send({ error: `User with email ${email} not found` });
+      return reply.code(404).send({ error: `User "${loginId}" not found` });
     }
 
     request.session.userId = user.id;
-    const fullUser = await getUserByEmailWithPassword(user.email);
+    const fullUser = await getUserByIdWithPassword(user.id);
     user.has_password = Boolean(fullUser?.password_hash);
     return { ok: true, user };
   });
@@ -203,7 +221,7 @@ export default async function authRoutes(fastify, options) {
         return reply.code(400).send({ error: 'New password must be at least 6 characters long' });
       }
 
-      const fullUser = await getUserByEmailWithPassword(currentUser.email);
+      const fullUser = await getUserByIdWithPassword(userId);
       if (fullUser && fullUser.password_hash) {
         if (!current_password) {
           return reply.code(400).send({ error: 'Current password is required to change your password' });
@@ -217,7 +235,7 @@ export default async function authRoutes(fastify, options) {
     }
 
     const updatedUser = await updateUser(userId, updates);
-    const fullUpdatedUser = await getUserByEmailWithPassword(updatedUser.email);
+    const fullUpdatedUser = await getUserByIdWithPassword(userId);
     updatedUser.has_password = Boolean(fullUpdatedUser?.password_hash);
 
     return { ok: true, user: updatedUser };

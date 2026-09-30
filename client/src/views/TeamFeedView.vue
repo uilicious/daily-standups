@@ -149,7 +149,7 @@
             <!-- Avatar with thick green ring if standup submitted (Standard posts do NOT add green ring) -->
             <div class="relative cursor-pointer transition-transform duration-150 group-hover:scale-110">
               <img
-                :src="member.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(member.name || member.email)}`"
+                :src="member.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(member.name || member.username || 'User')}`"
                 :alt="member.name"
                 class="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover transition-all duration-200 bg-slate-100"
                 :class="[

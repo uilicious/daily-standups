@@ -8,5 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2026-09-29
 
 ### Added
+- **Username Authentication & Management**: Added support for logging in via username or email. Seeded initial administrator with username only (`admin`). Required unique username on user creation (immutable once created), and enabled system administrators to update user email addresses.
 - **Daily Standups**: Comprehensive standup workflow including daily submissions, team activity feeds with date navigation, blocker highlighting, and Markdown support.
 - **Out of Office (OOO) & Schedule Management**: Team availability calendar, individual weekly work schedules, organization-wide working days, and leave tracking with half-day support.

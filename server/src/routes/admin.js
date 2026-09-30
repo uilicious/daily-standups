@@ -10,6 +10,7 @@ import {
   updateTeam,
   deleteTeam,
   getUserByEmail,
+  getUserByUsername,
   getQuestionsByTeamId,
   getQuestionById,
   createQuestion,
@@ -61,24 +62,38 @@ export default async function adminRoutes(fastify, options) {
       return reply.code(403).send({ error: 'Only administrators can create users' });
     }
 
-    const { email, name, password, role = 'member', team_ids = [] } = request.body || {};
+    const { username, email, name, password, role = 'member', team_ids = [] } = request.body || {};
 
-    if (!email || !email.trim()) {
-      return reply.code(400).send({ error: 'Email is required' });
+    if (!username || !username.trim()) {
+      return reply.code(400).send({ error: 'Username is required' });
     }
+    const cleanUsername = username.trim().toLowerCase();
+    if (!/^[a-zA-Z0-9._-]+$/.test(cleanUsername)) {
+      return reply.code(400).send({ error: 'Username can only contain letters, numbers, dots, hyphens, and underscores' });
+    }
+
     if (!name || !name.trim()) {
       return reply.code(400).send({ error: 'Name is required' });
     }
 
-    const existing = await getUserByEmail(email.trim());
-    if (existing) {
-      return reply.code(409).send({ error: `A user with email "${email}" already exists` });
+    const existingUsername = await getUserByUsername(cleanUsername);
+    if (existingUsername) {
+      return reply.code(409).send({ error: `A user with username "${username.trim()}" already exists` });
+    }
+
+    const cleanEmail = email && email.trim() ? email.trim().toLowerCase() : null;
+    if (cleanEmail) {
+      const existingEmail = await getUserByEmail(cleanEmail);
+      if (existingEmail) {
+        return reply.code(409).send({ error: `A user with email "${cleanEmail}" already exists` });
+      }
     }
 
     const validRole = role === 'admin' ? 'admin' : 'member';
 
     const newUser = await createUser({
-      email: email.trim(),
+      username: cleanUsername,
+      email: cleanEmail,
       name: name.trim(),
       password: password && password.trim() ? password.trim() : null,
       role: validRole,
@@ -103,10 +118,14 @@ export default async function adminRoutes(fastify, options) {
       return reply.code(404).send({ error: 'User not found' });
     }
 
-    if (email && email.toLowerCase() !== existing.email.toLowerCase()) {
-      const emailConflict = await getUserByEmail(email);
-      if (emailConflict && emailConflict.id !== userId) {
-        return reply.code(409).send({ error: `Email "${email}" is already used by another account` });
+    let cleanEmail = undefined;
+    if (email !== undefined) {
+      cleanEmail = email && email.trim() ? email.trim().toLowerCase() : null;
+      if (cleanEmail && (!existing.email || cleanEmail !== existing.email.toLowerCase())) {
+        const emailConflict = await getUserByEmail(cleanEmail);
+        if (emailConflict && emailConflict.id !== userId) {
+          return reply.code(409).send({ error: `Email "${email.trim()}" is already used by another account` });
+        }
       }
     }
 
@@ -119,9 +138,10 @@ export default async function adminRoutes(fastify, options) {
       }
     }
 
+    // Note: username is intentionally excluded so it cannot be changed once created
     const updated = await updateUser(userId, {
       name,
-      email,
+      email: cleanEmail,
       password: password && password.trim() ? password.trim() : undefined,
       role,
       team_ids: Array.isArray(team_ids) ? team_ids : undefined

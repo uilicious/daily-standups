@@ -12,7 +12,7 @@
     }
   ],
   "admin": {
-    "email": "admin@example.com",
+    "username": "admin",
     "name": "System Administrator",
     "password": "adminpassword123",
     "role": "admin",

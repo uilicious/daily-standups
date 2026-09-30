@@ -211,7 +211,7 @@
           </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <!-- Display Name -->
           <div>
             <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
@@ -226,18 +226,33 @@
             />
           </div>
 
+          <!-- Username (Read-Only) -->
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+              Username
+            </label>
+            <input
+              :value="user?.username"
+              disabled
+              type="text"
+              class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 font-mono text-sm font-medium cursor-not-allowed"
+            />
+            <p class="text-[11px] text-slate-400 mt-1">Unique username cannot be changed.</p>
+          </div>
+
           <!-- Email (Read-Only) -->
           <div>
             <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
               Email Address
             </label>
             <input
-              :value="user?.email"
+              :value="user?.email || 'No email configured'"
               disabled
-              type="email"
+              type="text"
               class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 text-sm font-medium cursor-not-allowed"
+              :class="{ 'italic text-slate-400': !user?.email }"
             />
-            <p class="text-[11px] text-slate-400 mt-1">Email is tied to your organization account and cannot be modified directly.</p>
+            <p class="text-[11px] text-slate-400 mt-1">Can be updated by a system administrator.</p>
           </div>
         </div>
 

@@ -51,13 +51,13 @@
         <!-- 2. Password Login Form -->
         <form @submit.prevent="handlePasswordLogin" class="space-y-4">
           <div>
-            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Email</label>
+            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Username or Email</label>
             <input
-              type="email"
-              v-model="email"
+              type="text"
+              v-model="identifier"
               required
-              autocomplete="email"
-              placeholder="name@company.com"
+              autocomplete="username"
+              placeholder="Username or email (e.g. admin)"
               class="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
@@ -98,7 +98,7 @@ const route = useRoute();
 const router = useRouter();
 const { login } = useAuth();
 
-const email = ref('');
+const identifier = ref('');
 const password = ref('');
 const loading = ref(false);
 const googleLoading = ref(false);
@@ -109,7 +109,7 @@ async function handlePasswordLogin() {
   errorMessage.value = '';
   loading.value = true;
   try {
-    await login(email.value, password.value);
+    await login(identifier.value, password.value);
     const redirect = route.query.redirect || '/';
     router.push(redirect);
   } catch (err) {

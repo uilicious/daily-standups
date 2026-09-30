@@ -6,7 +6,7 @@ export async function getTeamManagers(teamId) {
     .join('user_teams as ut', 'ut.user_id', 'u.id')
     .where('ut.team_id', teamId)
     .where('ut.role', 'manager')
-    .select('u.id', 'u.name', 'u.email', 'u.avatar_url', 'ut.role as team_role')
+    .select('u.id', 'u.username', 'u.name', 'u.email', 'u.avatar_url', 'ut.role as team_role')
     .orderBy('u.name', 'asc');
 }
 
@@ -98,6 +98,7 @@ export async function getTeamMembers(teamId) {
     .where('ut.team_id', teamId)
     .select(
       'u.id',
+      'u.username',
       'u.name',
       'u.email',
       'u.avatar_url',

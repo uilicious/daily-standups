@@ -18,7 +18,11 @@
               Admin
             </span>
           </div>
-          <p class="text-xs text-slate-500 mt-0.5">{{ standup.user_email }}</p>
+          <p class="text-xs text-slate-500 mt-0.5">
+            <span v-if="standup.user_username" class="font-mono text-slate-600">@{{ standup.user_username }}</span>
+            <span v-if="standup.user_username && standup.user_email"> · </span>
+            <span v-if="standup.user_email">{{ standup.user_email }}</span>
+          </p>
         </div>
       </div>
 

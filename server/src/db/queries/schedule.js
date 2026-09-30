@@ -218,6 +218,7 @@ export async function getTeamMembersWithAvailability(teamId, dateStr) {
 
     return {
       id: member.id,
+      username: member.username,
       name: member.name,
       email: member.email,
       avatar_url: member.avatar_url,

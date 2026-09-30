@@ -53,7 +53,11 @@
             </span>
           </div>
 
-          <p class="text-xs text-slate-500 mt-0.5">{{ post.user_email }}</p>
+          <p class="text-xs text-slate-500 mt-0.5">
+            <span v-if="post.user_username" class="font-mono text-slate-600">@{{ post.user_username }}</span>
+            <span v-if="post.user_username && post.user_email"> · </span>
+            <span v-if="post.user_email">{{ post.user_email }}</span>
+          </p>
         </div>
       </div>
 

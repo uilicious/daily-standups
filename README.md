@@ -65,10 +65,10 @@ npm start
 
 ## Initial Credentials & Configuration
 Initial teams and admin user are seeded on first launch:
-- **Default Admin Email:** `admin@example.com`
+- **Default Admin Username:** `admin` (no email configured)
 - **Default Admin Password:** `adminpassword123`
 
-> **Note for Production:** In production, specify `ADMIN_EMAIL` and `ADMIN_PASSWORD` in your environment or `.env` file. When `ADMIN_PASSWORD` is supplied, the server automatically synchronizes the admin account's password on startup.
+> **Note for Production:** In production, specify `ADMIN_USERNAME` (default `admin`), optional `ADMIN_EMAIL`, and `ADMIN_PASSWORD` in your environment or `.env` file. When `ADMIN_PASSWORD` is supplied, the server automatically synchronizes the admin account's password on startup.
 
 ## Docker Deployment (DevOps)
 

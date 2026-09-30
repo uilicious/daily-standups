@@ -79,6 +79,7 @@
             <thead>
               <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs font-semibold uppercase tracking-wider">
                 <th class="py-3.5 px-6">User</th>
+                <th class="py-3.5 px-6">Username</th>
                 <th class="py-3.5 px-6">Role</th>
                 <th class="py-3.5 px-6">Assigned Teams</th>
                 <th class="py-3.5 px-6 text-right">Actions</th>
@@ -95,9 +96,13 @@
                     />
                     <div>
                       <p class="font-semibold text-slate-900 leading-tight">{{ u.name }}</p>
-                      <p class="text-xs text-slate-500 mt-0.5">{{ u.email }}</p>
+                      <p v-if="u.email" class="text-xs text-slate-500 mt-0.5">{{ u.email }}</p>
+                      <p v-else class="text-xs text-slate-400 italic mt-0.5">No email configured</p>
                     </div>
                   </div>
+                </td>
+                <td class="py-4 px-6">
+                  <span class="font-mono text-xs text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md font-medium">@{{ u.username }}</span>
                 </td>
                 <td class="py-4 px-6">
                   <span
@@ -223,7 +228,7 @@
                   :key="m.id"
                   :src="m.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${m.name}`"
                   :alt="m.name"
-                  :title="`${m.name} (${m.email})`"
+                  :title="m.email ? `${m.name} (@${m.username}, ${m.email})` : `${m.name} (@${m.username})`"
                   class="inline-block h-6 w-6 rounded-full ring-2 ring-white object-cover bg-slate-100"
                 />
               </div>
@@ -385,16 +390,46 @@
             />
           </div>
 
+          <!-- Username -->
+          <div v-if="!userModal.isEdit">
+            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Username *</label>
+            <input
+              type="text"
+              v-model="userModal.form.username"
+              required
+              pattern="^[a-zA-Z0-9._-]+$"
+              placeholder="e.g. jdoe"
+              class="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <p class="text-[11px] text-slate-400 mt-1">
+              Required unique username for sign-in. Letters, numbers, dots, hyphens, and underscores only. (Cannot be changed later)
+            </p>
+          </div>
+          <div v-else>
+            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Username</label>
+            <input
+              type="text"
+              :value="userModal.form.username"
+              disabled
+              class="w-full px-3.5 py-2 border border-slate-200 bg-slate-100 text-slate-500 rounded-xl text-sm font-mono cursor-not-allowed"
+            />
+            <p class="text-[11px] text-amber-700 font-medium mt-1">
+              Username cannot be changed.
+            </p>
+          </div>
+
           <!-- Email -->
           <div>
-            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Email Address *</label>
+            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Email Address</label>
             <input
               type="email"
               v-model="userModal.form.email"
-              required
               placeholder="e.g. jane@company.com"
               class="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
+            <p class="text-[11px] text-slate-400 mt-1">
+              {{ userModal.isEdit ? 'Sys admins can update the user’s email address here.' : 'Optional. If configured, user can also log in using email or Google SSO.' }}
+            </p>
           </div>
 
           <!-- Password -->
@@ -584,7 +619,7 @@
             >
               <option value="" disabled>Select a user to add...</option>
               <option v-for="u in availableUsersForTeam" :key="u.id" :value="u.id">
-                {{ u.name }} ({{ u.email }})
+                {{ u.name }} (@{{ u.username }}{{ u.email ? ' · ' + u.email : '' }})
               </option>
             </select>
 
@@ -643,7 +678,10 @@
                       Manager
                     </span>
                   </div>
-                  <p class="text-xs text-slate-500 truncate">{{ m.email }}</p>
+                  <p class="text-xs text-slate-500 truncate">
+                    <span class="font-mono text-slate-700">@{{ m.username }}</span>
+                    <span v-if="m.email"> · {{ m.email }}</span>
+                  </p>
                 </div>
               </div>
 
@@ -954,7 +992,8 @@ const filteredUsers = computed(() => {
   const q = userSearch.value.toLowerCase();
   return users.value.filter(u =>
     u.name.toLowerCase().includes(q) ||
-    u.email.toLowerCase().includes(q) ||
+    (u.username && u.username.toLowerCase().includes(q)) ||
+    (u.email && u.email.toLowerCase().includes(q)) ||
     (u.teams && u.teams.some(t => t.name.toLowerCase().includes(q)))
   );
 });
@@ -998,6 +1037,7 @@ function openAddUserModal() {
     userId: null,
     form: {
       name: '',
+      username: '',
       email: '',
       password: '',
       role: 'member',
@@ -1014,7 +1054,8 @@ function openEditUserModal(u) {
     userId: u.id,
     form: {
       name: u.name,
-      email: u.email,
+      username: u.username,
+      email: u.email || '',
       password: '',
       role: u.role === 'admin' ? 'admin' : 'member',
       team_ids: u.teams ? u.teams.map(t => t.id) : []
@@ -1023,17 +1064,41 @@ function openEditUserModal(u) {
 }
 
 async function saveUser() {
+  const isEdit = userModal.value.isEdit;
+
+  if (!userModal.value.form.name || !userModal.value.form.name.trim()) {
+    showAlert('Full Name is required', 'error');
+    return;
+  }
+
+  if (!isEdit) {
+    const rawUsername = userModal.value.form.username ? userModal.value.form.username.trim() : '';
+    if (!rawUsername) {
+      showAlert('Username is required', 'error');
+      return;
+    }
+    if (!/^[a-zA-Z0-9._-]+$/.test(rawUsername)) {
+      showAlert('Username can only contain letters, numbers, dots, hyphens, and underscores', 'error');
+      return;
+    }
+    userModal.value.form.username = rawUsername.toLowerCase();
+  }
+
   userModal.value.saving = true;
   try {
-    const isEdit = userModal.value.isEdit;
     const url = isEdit ? `/api/admin/users/${userModal.value.userId}` : '/api/admin/users';
     const method = isEdit ? 'PUT' : 'POST';
+
+    const payload = { ...userModal.value.form };
+    if (isEdit) {
+      delete payload.username; // Username cannot be changed
+    }
 
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify(userModal.value.form)
+      body: JSON.stringify(payload)
     });
 
     const data = await res.json();
@@ -1052,7 +1117,8 @@ async function saveUser() {
 }
 
 async function deleteUserConfirm(u) {
-  if (!confirm(`Are you sure you want to delete user "${u.name}" (${u.email})?`)) return;
+  const userDesc = u.email ? `"${u.name}" (@${u.username}, ${u.email})` : `"${u.name}" (@${u.username})`;
+  if (!confirm(`Are you sure you want to delete user ${userDesc}?`)) return;
 
   try {
     const res = await fetch(`/api/admin/users/${u.id}`, {

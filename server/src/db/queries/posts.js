@@ -148,6 +148,7 @@ export async function getTeamPostById(id) {
     .select(
       'team_posts.*',
       'users.name as user_name',
+      'users.username as user_username',
       'users.email as user_email',
       'users.avatar_url as user_avatar',
       'users.role as user_role'
@@ -200,6 +201,7 @@ export async function getPostsForTeamFeed(teamId, queryDate) {
     .select(
       'team_posts.*',
       'users.name as user_name',
+      'users.username as user_username',
       'users.email as user_email',
       'users.avatar_url as user_avatar',
       'users.role as user_role'

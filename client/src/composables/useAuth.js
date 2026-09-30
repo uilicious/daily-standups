@@ -33,12 +33,12 @@ export function useAuth() {
     return user.value;
   }
 
-  async function login(email, password) {
+  async function login(identifier, password) {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ identifier, email: identifier, username: identifier, password })
     });
 
     const data = await res.json();
@@ -50,12 +50,12 @@ export function useAuth() {
     return data.user;
   }
 
-  async function devLogin(email) {
+  async function devLogin(identifier) {
     const res = await fetch('/api/auth/dev-login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ email })
+      body: JSON.stringify({ identifier, email: identifier, username: identifier })
     });
 
     const data = await res.json();

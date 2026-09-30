@@ -42,6 +42,7 @@ export async function getStandupsByTeamAndDate(teamId, date) {
       's.created_at',
       's.updated_at',
       'u.name as user_name',
+      'u.username as user_username',
       'u.email as user_email',
       'u.avatar_url as user_avatar',
       'u.role as user_role'

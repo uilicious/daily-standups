@@ -100,7 +100,10 @@
                 <!-- User Summary Header -->
                 <div class="px-3.5 py-2.5 border-b border-slate-100">
                   <p class="font-semibold text-slate-900 truncate text-sm">{{ user.name }}</p>
-                  <p class="text-[11px] text-slate-500 truncate mt-0.5">{{ user.email }}</p>
+                  <p class="text-[11px] text-slate-500 truncate mt-0.5">
+                    <span class="font-mono">@{{ user.username }}</span>
+                    <span v-if="user.email"> · {{ user.email }}</span>
+                  </p>
                   <div class="mt-2">
                     <span
                       class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"

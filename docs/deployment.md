@@ -70,7 +70,8 @@ docker run -d \
 | `HOST` | `0.0.0.0` | Bind address for the HTTP server. |
 | `NODE_ENV` | `development` | Runtime mode (`production` enables secure cookies & optimizations). |
 | `SESSION_SECRET` | *(required in prod)* | Secret string (minimum 32 characters) for signing session cookies. |
-| `ADMIN_EMAIL` | `admin@example.com` | Target email for the admin user. |
+| `ADMIN_USERNAME` | `admin` | Target username for the admin user. |
+| `ADMIN_EMAIL` | *(none)* | Optional email for the admin user. |
 | `ADMIN_PASSWORD` | *(none)* | If set, the server updates the admin password to this value on boot. |
 | `DB_CLIENT` | `better-sqlite3` | Database dialect: `better-sqlite3`, `pg`, or `mysql2`. |
 | `DATABASE_URL` | *(none)* | Connection URI for PostgreSQL or MySQL. |

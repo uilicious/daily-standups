@@ -80,13 +80,26 @@ export async function initDatabase() {
   if (!hasUsers) {
     await db.schema.createTable('users', (table) => {
       table.increments('id').primary();
-      table.string('email').unique().notNullable();
+      table.string('username').unique().notNullable();
+      table.string('email').unique().nullable();
       table.string('name').notNullable();
       table.string('password_hash').nullable();
       table.text('avatar_url').nullable();
       table.string('role').notNullable().defaultTo('member');
       table.timestamp('created_at').defaultTo(db.fn.now());
     });
+  } else {
+    const hasUsername = await db.schema.hasColumn('users', 'username');
+    if (!hasUsername) {
+      await db.schema.alterTable('users', (table) => {
+        table.string('username').unique().nullable();
+      });
+      const existingUsers = await db('users').select('id', 'email', 'name');
+      for (const u of existingUsers) {
+        const fallback = (u.email ? u.email.split('@')[0] : u.name).toLowerCase().replace(/[^a-z0-9_]/g, '') || `user${u.id}`;
+        await db('users').where('id', u.id).update({ username: fallback });
+      }
+    }
   }
 
   // 2. teams table
@@ -347,14 +360,18 @@ export async function syncAdminPasswordFromEnv() {
   const rawPassword = envPassword.trim();
   const newHash = hashPassword(rawPassword);
 
+  let targetUsername = process.env.ADMIN_USERNAME ? process.env.ADMIN_USERNAME.trim().toLowerCase() : null;
   let targetEmail = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.trim().toLowerCase() : null;
 
-  if (!targetEmail) {
+  if (!targetUsername && !targetEmail) {
     const seedFilePath = process.env.SEED_FILE || path.join(dbDir, 'seed.json');
     if (fs.existsSync(seedFilePath)) {
       try {
         const raw = fs.readFileSync(seedFilePath, 'utf-8');
         const seedData = JSON.parse(raw);
+        if (seedData.admin?.username) {
+          targetUsername = seedData.admin.username.trim().toLowerCase();
+        }
         if (seedData.admin?.email) {
           targetEmail = seedData.admin.email.trim().toLowerCase();
         }
@@ -365,7 +382,10 @@ export async function syncAdminPasswordFromEnv() {
   }
 
   let adminUser = null;
-  if (targetEmail) {
+  if (targetUsername) {
+    adminUser = await db('users').whereRaw('LOWER(username) = ?', [targetUsername]).first();
+  }
+  if (!adminUser && targetEmail) {
     adminUser = await db('users').whereRaw('LOWER(email) = ?', [targetEmail]).first();
   }
 
@@ -380,18 +400,19 @@ export async function syncAdminPasswordFromEnv() {
         password_hash: newHash,
         role: 'admin'
       });
-    console.log(`[Auth] Admin password for "${adminUser.email}" was reset from environment (ADMIN_PASSWORD).`);
+    console.log(`[Auth] Admin password for "${adminUser.username || adminUser.email}" was reset from environment (ADMIN_PASSWORD).`);
   } else {
-    const emailToUse = targetEmail || 'admin@example.com';
-    const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(emailToUse)}`;
+    const usernameToUse = targetUsername || 'admin';
+    const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(usernameToUse)}`;
     await db('users').insert({
-      email: emailToUse,
+      username: usernameToUse,
+      email: targetEmail || null,
       name: 'System Administrator',
       password_hash: newHash,
       avatar_url: avatar,
       role: 'admin'
     });
-    console.log(`[Auth] Admin user "${emailToUse}" created with password from environment (ADMIN_PASSWORD).`);
+    console.log(`[Auth] Admin user "${usernameToUse}" created with password from environment (ADMIN_PASSWORD).`);
   }
 }
 
@@ -437,11 +458,14 @@ export async function seedFromExternalFile() {
     const admin = seedData.admin;
     const initialPassword = process.env.ADMIN_PASSWORD || admin.password;
     const passwordHash = initialPassword ? hashPassword(initialPassword) : null;
-    const avatar = admin.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(admin.name || admin.email)}`;
+    const username = (admin.username ? admin.username.trim() : 'admin').toLowerCase();
+    const email = admin.email && admin.email.trim() ? admin.email.trim().toLowerCase() : null;
+    const avatar = admin.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(admin.name || username)}`;
 
     const insertResult = await db('users').insert({
-      email: admin.email.trim().toLowerCase(),
-      name: admin.name.trim(),
+      username: username,
+      email: email,
+      name: admin.name ? admin.name.trim() : 'System Administrator',
       password_hash: passwordHash,
       avatar_url: avatar,
       role: 'admin'
@@ -468,7 +492,7 @@ export async function seedFromExternalFile() {
       }
     }
 
-    console.log(`[Seed] Seeded initial admin user (${admin.email}) from ${path.basename(seedFilePath)}`);
+    console.log(`[Seed] Seeded initial admin user (${username}) from ${path.basename(seedFilePath)}`);
   }
 }
 
