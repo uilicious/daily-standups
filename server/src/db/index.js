@@ -20,16 +20,33 @@ function getDatabaseConfig() {
 
   // 1. PostgreSQL
   if (dbClient === 'pg' || dbClient === 'postgres' || dbClient === 'postgresql' || databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://')) {
-    return {
-      client: 'pg',
-      connection: databaseUrl || {
+    const isSsl = process.env.PGSSL === 'true' || databaseUrl.includes('sslmode=require') || databaseUrl.includes('ssl=true');
+    let connectionConfig;
+
+    if (databaseUrl) {
+      if (isSsl) {
+        // DigitalOcean and cloud PostgreSQL providers enforce SSL with self-signed certificate chains
+        connectionConfig = {
+          connectionString: databaseUrl,
+          ssl: { rejectUnauthorized: false }
+        };
+      } else {
+        connectionConfig = databaseUrl;
+      }
+    } else {
+      connectionConfig = {
         host: process.env.PGHOST || process.env.DB_HOST || '127.0.0.1',
         port: Number(process.env.PGPORT || process.env.DB_PORT || 5432),
         user: process.env.PGUSER || process.env.DB_USER || 'postgres',
         password: process.env.PGPASSWORD || process.env.DB_PASSWORD || '',
         database: process.env.PGDATABASE || process.env.DB_NAME || 'daily_standups',
-        ssl: process.env.PGSSL === 'true' ? { rejectUnauthorized: false } : false
-      },
+        ssl: isSsl ? { rejectUnauthorized: false } : false
+      };
+    }
+
+    return {
+      client: 'pg',
+      connection: connectionConfig,
       pool: { min: 2, max: 10 }
     };
   }

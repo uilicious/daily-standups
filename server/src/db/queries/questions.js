@@ -28,16 +28,18 @@ export async function createQuestion(teamId, { text, is_required = true, order_i
     index = (maxOrder?.max_index ?? -1) + 1;
   }
 
-  const result = await db('questions').insert({
+  const isPg = db.client.dialect === 'postgresql' || db.client.config?.client === 'pg';
+  const query = db('questions').insert({
     team_id: teamId,
     text: text.trim(),
     is_required: Boolean(is_required),
     order_index: index,
     updated_at: db.fn.now()
   });
+  const result = isPg ? await query.returning('id') : await query;
 
   let qId = Array.isArray(result) ? result[0] : result;
-  if (typeof qId === 'object' && qId !== null) qId = qId.id || qId;
+  if (typeof qId === 'object' && qId !== null) qId = qId.id || Object.values(qId)[0];
 
   return getQuestionById(qId);
 }

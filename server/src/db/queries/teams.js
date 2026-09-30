@@ -59,15 +59,17 @@ export async function getTeamById(id) {
 
 export async function createTeam({ name, slug, description = '' }) {
   const generatedSlug = slug ? slug.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-') : name.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-');
-  const result = await db('teams').insert({
+  const isPg = db.client.dialect === 'postgresql' || db.client.config?.client === 'pg';
+  const query = db('teams').insert({
     name: name.trim(),
     slug: generatedSlug,
     description: description ? description.trim() : ''
   });
+  const result = isPg ? await query.returning('id') : await query;
 
   let teamId = Array.isArray(result) ? result[0] : result;
   if (typeof teamId === 'object' && teamId !== null) {
-    teamId = teamId.id || teamId;
+    teamId = teamId.id || Object.values(teamId)[0];
   }
 
   // Seed default 3 questions for new team

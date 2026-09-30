@@ -116,5 +116,6 @@ For more detailed guides and architecture references, consult the documentation:
 - [**Architecture Overview**](docs/architecture.md): System design, Knex multi-database layer (SQLite, PostgreSQL, MySQL), database schema, and security model.
 - [**Features & Modules**](docs/features.md): Details on customizable team questions, team posts & hand-off updates, avatars & profile photo uploads, role-based access control (RBAC), and markdown formatting.
 - [**Deployment Guide**](docs/deployment.md): Complete guide to Docker deployments, environment variables reference, volume persistence, and database setups.
+- [**DigitalOcean Deployment Guide**](docs/digitalocean-deployment.md): Step-by-step guide for deploying to DigitalOcean with PostgreSQL (App Platform & Droplet).
 - [**Changelog**](CHANGELOG.md): Record of notable updates and release notes.
 

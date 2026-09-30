@@ -123,7 +123,8 @@ export async function createTeamPost({
     calculatedTargetDate = calculateNextWorkingDay(postDate, orgWorkDays);
   }
 
-  const [id] = await db('team_posts').insert({
+  const isPg = db.client.dialect === 'postgresql' || db.client.config?.client === 'pg';
+  const query = db('team_posts').insert({
     team_id: teamId,
     user_id: userId,
     post_type: postType,
@@ -134,8 +135,14 @@ export async function createTeamPost({
     created_at: db.fn.now(),
     updated_at: db.fn.now()
   });
+  const result = isPg ? await query.returning('id') : await query;
 
-  return getTeamPostById(id);
+  let postId = Array.isArray(result) ? result[0] : result;
+  if (typeof postId === 'object' && postId !== null) {
+    postId = postId.id || Object.values(postId)[0];
+  }
+
+  return getTeamPostById(postId);
 }
 
 /**

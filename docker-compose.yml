@@ -1,0 +1,43 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: daily-standups:latest
+    container_name: daily-standups-app
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      - SESSION_SECRET=${SESSION_SECRET}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-adminpassword123}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - DB_CLIENT=pg
+      - DATABASE_URL=postgres://${POSTGRES_USER:-standup_user}:${POSTGRES_PASSWORD:-standup_secret_pass}@db:5432/${POSTGRES_DB:-daily_standups}
+      - APP_URL=${APP_URL:-http://localhost:3000}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    container_name: daily-standups-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-standup_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-standup_secret_pass}
+      - POSTGRES_DB=${POSTGRES_DB:-daily_standups}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-standup_user} -d ${POSTGRES_DB:-daily_standups}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

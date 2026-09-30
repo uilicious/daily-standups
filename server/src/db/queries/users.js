@@ -152,7 +152,8 @@ export async function createUser({ username, email, name, password, avatar_url, 
   const passwordHash = password ? hashPassword(password) : null;
   const validRole = role === 'admin' ? 'admin' : 'member';
 
-  const insertResult = await db('users').insert({
+  const isPg = db.client.dialect === 'postgresql' || db.client.config?.client === 'pg';
+  const query = db('users').insert({
     username: cleanUsername,
     email: cleanEmail,
     name: name.trim(),
@@ -160,10 +161,11 @@ export async function createUser({ username, email, name, password, avatar_url, 
     avatar_url: avatar,
     role: validRole
   });
+  const insertResult = isPg ? await query.returning('id') : await query;
 
   let userId = Array.isArray(insertResult) ? insertResult[0] : insertResult;
   if (typeof userId === 'object' && userId !== null) {
-    userId = userId.id || userId;
+    userId = userId.id || Object.values(userId)[0];
   }
 
   if (Array.isArray(team_ids) && team_ids.length > 0) {
