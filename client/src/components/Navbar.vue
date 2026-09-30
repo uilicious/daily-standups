@@ -39,28 +39,6 @@
             <span>Submit Standup</span>
           </router-link>
 
-          <!-- My Schedule Link -->
-          <router-link
-            v-if="user"
-            to="/schedule"
-            class="px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-1.5"
-            :class="$route.path === '/schedule' ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'"
-          >
-            <CalendarClock class="w-4 h-4" />
-            <span class="hidden sm:inline">My Schedule</span>
-          </router-link>
-
-          <!-- Admin / Management Dashboard Link (Admins & Managers) -->
-          <router-link
-            v-if="canManage"
-            to="/admin"
-            class="px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-1.5"
-            :class="$route.path.startsWith('/admin') ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'"
-          >
-            <ShieldAlert class="w-4 h-4" />
-            <span class="hidden sm:inline">Admin</span>
-          </router-link>
-
           <!-- User Profile & Dropdown -->
           <div v-if="user" class="relative pl-2 border-l border-slate-200" ref="dropdownRef">
             <button
