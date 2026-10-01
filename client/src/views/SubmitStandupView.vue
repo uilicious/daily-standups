@@ -99,6 +99,7 @@
               :required="q.is_required"
               :rows="3"
               :placeholder="getPlaceholder(q, idx)"
+              :mention-users="teamMembers"
             />
           </div>
         </div>
@@ -146,6 +147,7 @@ const selectedTeamId = ref(null);
 const standupDate = ref(new Date().toISOString().split('T')[0]);
 
 const teamQuestions = ref([]);
+const teamMembers = ref([]);
 const answers = ref({}); // { [questionId]: string }
 const loadingQuestions = ref(false);
 
@@ -239,6 +241,7 @@ async function checkExistingSubmission() {
     });
     if (res.ok) {
       const data = await res.json();
+      teamMembers.value = data.members || [];
       const existing = (data.standups || []).find(s => s.user_id === user.value?.id);
       if (existing) {
         isExistingSubmission.value = true;

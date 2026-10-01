@@ -331,6 +331,7 @@
       :post="selectedPostForEdit"
       :current-date="selectedDate"
       :org-work-days="orgWorkDays"
+      :members="members"
       @close="createPostModalOpen = false"
       @saved="handlePostSaved"
     />

@@ -138,6 +138,7 @@
             v-model="content"
             :placeholder="isHandoff ? 'Write your hand-off update (e.g. what was completed, pending PRs, who to ping, next steps for Monday)...' : 'Share an update with your team (Markdown formatting supported)...'"
             :rows="6"
+            :mention-users="members"
             required
           />
         </div>
@@ -205,6 +206,10 @@ const props = defineProps({
   orgWorkDays: {
     type: Array,
     default: () => [1, 2, 3, 4, 5]
+  },
+  members: {
+    type: Array,
+    default: () => []
   }
 });
 
