@@ -42,7 +42,7 @@ export default async function scheduleRoutes(fastify, options) {
   });
 
   // 2. Update weekly working schedule (days 1=Mon .. 7=Sun)
-  fastify.put('/me/work-days', async (request, reply) => {
+  fastify.put('/me/workdays', async (request, reply) => {
     const user = await getAuthenticatedUser(request, reply);
     if (!user) return;
 
