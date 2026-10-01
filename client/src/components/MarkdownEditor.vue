@@ -101,7 +101,7 @@
         @input="handleInput"
         @keydown="handleKeydown"
         @click="checkMentionTrigger"
-        @keyup="checkMentionTrigger"
+        @keyup="handleKeyup"
         @blur="handleBlur"
         :placeholder="placeholder"
         :required="required"
@@ -125,6 +125,7 @@
     <Teleport to="body">
       <div
         v-if="showMentionDropdown && filteredUsers.length > 0"
+        ref="dropdownRef"
         :style="dropdownStyle"
         @mousedown.stop
         class="max-h-56 overflow-y-auto bg-white rounded-xl shadow-2xl border border-slate-200 divide-y divide-slate-100 py-1"
@@ -135,7 +136,9 @@
         <button
           v-for="(u, index) in filteredUsers"
           :key="u.id || u.username"
+          :data-index="index"
           type="button"
+          @mouseenter="selectedIndex = index"
           @mousedown.prevent="selectUser(u)"
           class="w-full text-left px-3 py-2 flex items-center space-x-2.5 transition text-xs cursor-pointer"
           :class="index === selectedIndex ? 'bg-indigo-50 text-indigo-900 font-medium' : 'hover:bg-slate-50 text-slate-700'"
@@ -170,6 +173,7 @@
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue';
 import { Bold, Italic, List, Code, Link, Eye, AtSign } from '@lucide/vue';
 import { renderMarkdown } from '@/utils/markdown.js';
+import { useAuth } from '@/composables/useAuth.js';
 
 const props = defineProps({
   modelValue: {
@@ -196,7 +200,10 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue']);
 
+const { user: currentUser } = useAuth();
+
 const textareaRef = ref(null);
+const dropdownRef = ref(null);
 const activeTab = ref('write');
 
 // Mentions autocomplete state
@@ -209,9 +216,16 @@ const dropdownStyle = ref({});
 const filteredUsers = computed(() => {
   if (!props.mentionUsers || props.mentionUsers.length === 0) return [];
   const q = (mentionQuery.value || '').toLowerCase().trim();
+  const currentUserId = currentUser.value?.id;
+  const currentUsername = (currentUser.value?.username || '').toLowerCase();
+
   return props.mentionUsers
     .filter(u => {
       if (!u || !u.username) return false;
+      // Exclude logged in user
+      if (currentUserId && (u.id === currentUserId || u.user_id === currentUserId)) return false;
+      if (currentUsername && u.username.toLowerCase() === currentUsername) return false;
+
       const username = (u.username || '').toLowerCase();
       const name = (u.name || '').toLowerCase();
       return username.includes(q) || name.includes(q);
@@ -289,17 +303,28 @@ function checkMentionTrigger() {
   // Look for @ preceded by start of line, whitespace, or opening bracket/quote
   const match = textBefore.match(/(?:^|[\s([{<])@([a-zA-Z0-9._-]*)$/);
   if (match && props.mentionUsers && props.mentionUsers.length > 0) {
-    mentionQuery.value = match[1];
+    const newQuery = match[1];
+    // Only reset selectedIndex to 0 if the typed query changed or dropdown wasn't open
+    if (newQuery !== mentionQuery.value || !showMentionDropdown.value) {
+      selectedIndex.value = 0;
+    }
+    mentionQuery.value = newQuery;
     // Index where '@' character starts
-    mentionStartIndex.value = cursorPos - match[1].length - 1;
+    mentionStartIndex.value = cursorPos - newQuery.length - 1;
     showMentionDropdown.value = true;
-    selectedIndex.value = 0;
     nextTick(() => {
       updateDropdownPosition();
     });
   } else {
     showMentionDropdown.value = false;
   }
+}
+
+function handleKeyup(e) {
+  if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+    return;
+  }
+  checkMentionTrigger();
 }
 
 function handleBlur() {
@@ -484,16 +509,26 @@ function handleKeydown(e) {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       selectedIndex.value = (selectedIndex.value + 1) % filteredUsers.value.length;
+      nextTick(() => {
+        const activeBtn = dropdownRef.value?.querySelector(`[data-index="${selectedIndex.value}"]`);
+        if (activeBtn) activeBtn.scrollIntoView({ block: 'nearest' });
+      });
       return;
     }
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       selectedIndex.value = (selectedIndex.value - 1 + filteredUsers.value.length) % filteredUsers.value.length;
+      nextTick(() => {
+        const activeBtn = dropdownRef.value?.querySelector(`[data-index="${selectedIndex.value}"]`);
+        if (activeBtn) activeBtn.scrollIntoView({ block: 'nearest' });
+      });
       return;
     }
     if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault();
-      selectUser(filteredUsers.value[selectedIndex.value]);
+      if (filteredUsers.value[selectedIndex.value]) {
+        selectUser(filteredUsers.value[selectedIndex.value]);
+      }
       return;
     }
     if (e.key === 'Escape') {
