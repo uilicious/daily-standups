@@ -123,6 +123,7 @@ import { computed } from 'vue';
 import { History, CheckCircle2, AlertTriangle, ShieldCheck, MessageSquare } from '@lucide/vue';
 import { useAuth } from '@/composables/useAuth.js';
 import { renderMarkdown } from '@/utils/markdown.js';
+import { formatTime, isEdited } from '@/utils/date.js';
 
 const props = defineProps({
   standup: {
@@ -140,18 +141,11 @@ const isOwner = computed(() => {
 });
 
 const wasUpdated = computed(() => {
-  return props.standup.updated_at && props.standup.created_at && props.standup.updated_at !== props.standup.created_at;
+  return isEdited(props.standup.created_at, props.standup.updated_at);
 });
 
 const formattedTime = computed(() => {
-  const dateStr = props.standup.updated_at || props.standup.created_at;
-  if (!dateStr) return '';
-  try {
-    const d = new Date(dateStr.replace(' ', 'T') + 'Z');
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } catch (e) {
-    return dateStr;
-  }
+  return formatTime(props.standup.updated_at || props.standup.created_at);
 });
 
 function isBlockerQuestion(text) {

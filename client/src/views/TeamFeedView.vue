@@ -361,6 +361,7 @@ import {
   calculateNextWorkingDay,
   calculatePreviousWorkingDay
 } from '@/utils/schedule.js';
+import { parseDate } from '@/utils/date.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -455,7 +456,7 @@ const combinedFeedItems = computed(() => {
       type: 'standup',
       id: `standup-${s.id}`,
       data: s,
-      timestamp: new Date(s.created_at || selectedDate.value).getTime()
+      timestamp: parseDate(s.created_at)?.getTime() || new Date(selectedDate.value).getTime()
     });
   });
   filteredTodayPosts.value.forEach(p => {
@@ -463,7 +464,7 @@ const combinedFeedItems = computed(() => {
       type: 'post',
       id: `post-${p.id}`,
       data: p,
-      timestamp: new Date(p.created_at || selectedDate.value).getTime()
+      timestamp: parseDate(p.created_at)?.getTime() || new Date(selectedDate.value).getTime()
     });
   });
   return items.sort((a, b) => b.timestamp - a.timestamp);

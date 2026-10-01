@@ -118,6 +118,7 @@ import { computed } from 'vue';
 import { ArrowRightLeft, MessageSquare, Trash2, Calendar } from '@lucide/vue';
 import { renderMarkdown } from '@/utils/markdown.js';
 import { formatFullDate } from '@/utils/schedule.js';
+import { formatTime, isEdited } from '@/utils/date.js';
 
 const props = defineProps({
   post: {
@@ -158,20 +159,11 @@ const renderedHtml = computed(() => {
 });
 
 const wasUpdated = computed(() => {
-  if (!props.post.created_at || !props.post.updated_at) return false;
-  const created = new Date(props.post.created_at).getTime();
-  const updated = new Date(props.post.updated_at).getTime();
-  return updated - created > 60000; // >1 minute difference
+  return isEdited(props.post.created_at, props.post.updated_at);
 });
 
 const formattedTimestamp = computed(() => {
-  if (!props.post.created_at) return '';
-  try {
-    const d = new Date(props.post.created_at);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } catch (e) {
-    return '';
-  }
+  return formatTime(props.post.created_at);
 });
 
 const formattedOriginalDate = computed(() => {
