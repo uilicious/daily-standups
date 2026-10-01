@@ -9,7 +9,6 @@
 2. **Commit Request & Preview Protocol**:
    When changes are ready to be committed, you must present a review to the user including:
    - **Staged Changes Summary**: List of modified/added/deleted files (e.g., `git status -s`).
-   - **Diff Preview**: A concise diff or clear overview of the exact changes staged.
    - **Proposed Commit Message**: The exact commit message to be used (following Conventional Commits format).
    - **Explicit Request**: Ask the user for confirmation before running `git commit`.
 
