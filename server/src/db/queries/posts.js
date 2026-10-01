@@ -1,4 +1,5 @@
 import db from '../index.js';
+import { attachReactionsToItems, deleteReactionsForTarget } from './reactions.js';
 
 /**
  * Get organization working days from org_settings (defaults to [1, 2, 3, 4, 5])
@@ -148,7 +149,7 @@ export async function createTeamPost({
 /**
  * Get a single post by ID with author details
  */
-export async function getTeamPostById(id) {
+export async function getTeamPostById(id, currentUserId = null) {
   const post = await db('team_posts')
     .join('users', 'team_posts.user_id', 'users.id')
     .where('team_posts.id', id)
@@ -162,7 +163,9 @@ export async function getTeamPostById(id) {
     )
     .first();
 
-  return post || null;
+  if (!post) return null;
+  await attachReactionsToItems([post], 'post', currentUserId);
+  return post;
 }
 
 /**
@@ -186,6 +189,7 @@ export async function updateTeamPost(id, { postType, title, content, targetDate 
  * Delete a post by ID
  */
 export async function deleteTeamPost(id) {
+  await deleteReactionsForTarget('post', id);
   return db('team_posts').where('id', id).del();
 }
 
@@ -194,7 +198,7 @@ export async function deleteTeamPost(id) {
  * - Posts created on this date (`date = queryDate`)
  * - Hand-off posts whose target date is this date (`post_type = 'handoff' AND target_date = queryDate AND date != queryDate`)
  */
-export async function getPostsForTeamFeed(teamId, queryDate) {
+export async function getPostsForTeamFeed(teamId, queryDate, currentUserId = null) {
   const posts = await db('team_posts')
     .join('users', 'team_posts.user_id', 'users.id')
     .where('team_posts.team_id', teamId)
@@ -215,8 +219,10 @@ export async function getPostsForTeamFeed(teamId, queryDate) {
     )
     .orderBy('team_posts.created_at', 'desc');
 
-  return posts.map(p => ({
+  const mapped = posts.map(p => ({
     ...p,
     is_incoming_handoff: p.post_type === 'handoff' && p.target_date === queryDate && p.date !== queryDate
   }));
+
+  return attachReactionsToItems(mapped, 'post', currentUserId);
 }

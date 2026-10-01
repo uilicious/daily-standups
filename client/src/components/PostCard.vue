@@ -110,12 +110,24 @@
         Featured for next working day: <strong class="text-slate-600">{{ formattedTargetDate }}</strong>
       </span>
     </div>
+
+    <!-- Emoji Reactions Bar -->
+    <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+      <EmojiReactions
+        target-type="post"
+        :target-id="post.id"
+        :reactions="post.reactions || []"
+        :current-user="currentUser"
+        @reactions-updated="(updated) => (post.reactions = updated)"
+      />
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue';
 import { ArrowRightLeft, MessageSquare, Trash2, Calendar } from '@lucide/vue';
+import EmojiReactions from './EmojiReactions.vue';
 import { renderMarkdown } from '@/utils/markdown.js';
 import { formatFullDate } from '@/utils/schedule.js';
 import { formatTime, isEdited } from '@/utils/date.js';

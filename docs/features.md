@@ -64,3 +64,17 @@ Standup answers and posts support formatted text:
 - **Formatting Toolbar**: Quick-insert buttons for bold, italic, bulleted lists, inline code, fenced code blocks, and markdown links.
 - **Live Preview Tab**: Instant tabbed preview to check formatted text before submission.
 - **Secure Rendering**: HTML output is sanitized with `DOMPurify` to safeguard against script injection.
+
+---
+
+## 6. Emoji Reactions
+
+Team members can react to both Team Posts and Standups with emojis:
+
+- **Popular Reactions Palette**: One-click quick reactions with popular emojis (👍, ❤️, 🎉, 🚀, 👀, 👏, 🔥, 💯).
+- **Search & Custom Emoji Input**: Search by emoji name/keyword or paste/type any custom unicode emoji.
+- **Interactive Reaction Chips**:
+  - Displays aggregated reaction badges with counts.
+  - Active visual styling when reacted by the current user.
+  - **Single Reaction Limit**: Each user can give at most 1 reaction per post or standup. Selecting another emoji switches the reaction, while clicking the active emoji removes it.
+  - **Immediate Floating Tooltips**: Hovering over any reaction badge displays an immediate popup detailing who reacted (e.g., "Alice Chen and Bob Smith", or "You and Alice Chen").

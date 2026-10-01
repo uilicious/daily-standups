@@ -3,7 +3,8 @@ import {
   getTeamPostById,
   updateTeamPost,
   deleteTeamPost,
-  canUserManageTeam
+  canUserManageTeam,
+  toggleReaction
 } from '../db/queries.js';
 
 export default async function postRoutes(fastify, options) {
@@ -70,5 +71,36 @@ export default async function postRoutes(fastify, options) {
 
     await deleteTeamPost(post.id);
     return { success: true };
+  });
+
+  // Toggle emoji reaction on a post
+  fastify.post('/:id/reactions', async (request, reply) => {
+    const user = await checkAuth(request, reply);
+    if (!user) return;
+
+    const { id } = request.params;
+    const post = await getTeamPostById(Number(id));
+    if (!post) {
+      return reply.code(404).send({ error: 'Post not found' });
+    }
+
+    const isMember = (user.teams || []).some(t => t.id === post.team_id);
+    if (!isMember && user.role !== 'admin') {
+      return reply.code(403).send({ error: 'You do not have permission to react to this post' });
+    }
+
+    const { emoji } = request.body || {};
+    if (!emoji || typeof emoji !== 'string' || !emoji.trim()) {
+      return reply.code(400).send({ error: 'Emoji is required' });
+    }
+
+    const result = await toggleReaction({
+      userId: user.id,
+      targetType: 'post',
+      targetId: post.id,
+      emoji: emoji.trim()
+    });
+
+    return result;
   });
 }

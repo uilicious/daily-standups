@@ -1,5 +1,6 @@
 import db, { DEFAULT_STANDUP_QUESTIONS } from '../index.js';
 import { getQuestionsByTeamId } from './questions.js';
+import { attachReactionsToItems, deleteReactionsForTarget } from './reactions.js';
 
 async function attachAnswersToStandups(standups) {
   if (!standups || standups.length === 0) return standups;
@@ -29,7 +30,7 @@ async function attachAnswersToStandups(standups) {
   return standups;
 }
 
-export async function getStandupsByTeamAndDate(teamId, date) {
+export async function getStandupsByTeamAndDate(teamId, date, currentUserId = null) {
   const standups = await db('standups as s')
     .join('users as u', 'u.id', 's.user_id')
     .where('s.team_id', teamId)
@@ -49,10 +50,36 @@ export async function getStandupsByTeamAndDate(teamId, date) {
     )
     .orderBy('s.updated_at', 'desc');
 
-  return attachAnswersToStandups(standups);
+  const withAnswers = await attachAnswersToStandups(standups);
+  return attachReactionsToItems(withAnswers, 'standup', currentUserId);
 }
 
-export async function getTodayStandupsForUser(userId, date) {
+export async function getStandupById(id, currentUserId = null) {
+  const standup = await db('standups as s')
+    .join('users as u', 'u.id', 's.user_id')
+    .where('s.id', id)
+    .select(
+      's.id',
+      's.user_id',
+      's.team_id',
+      's.date',
+      's.created_at',
+      's.updated_at',
+      'u.name as user_name',
+      'u.username as user_username',
+      'u.email as user_email',
+      'u.avatar_url as user_avatar',
+      'u.role as user_role'
+    )
+    .first();
+
+  if (!standup) return null;
+  const withAnswers = await attachAnswersToStandups([standup]);
+  await attachReactionsToItems(withAnswers, 'standup', currentUserId);
+  return withAnswers[0];
+}
+
+export async function getTodayStandupsForUser(userId, date, currentUserId = null) {
   const standups = await db('standups as s')
     .join('teams as t', 't.id', 's.team_id')
     .where('s.user_id', userId)
@@ -67,7 +94,8 @@ export async function getTodayStandupsForUser(userId, date) {
       't.slug as team_slug'
     );
 
-  return attachAnswersToStandups(standups);
+  const withAnswers = await attachAnswersToStandups(standups);
+  return attachReactionsToItems(withAnswers, 'standup', currentUserId || userId);
 }
 
 export async function saveStandup({ user_id, team_id, date, answers, yesterday, today, blockers }) {

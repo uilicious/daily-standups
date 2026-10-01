@@ -115,12 +115,24 @@
         </p>
       </div>
     </div>
+
+    <!-- Emoji Reactions Bar -->
+    <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+      <EmojiReactions
+        target-type="standup"
+        :target-id="standup.id"
+        :reactions="standup.reactions || []"
+        :current-user="user"
+        @reactions-updated="(updated) => (standup.reactions = updated)"
+      />
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue';
 import { History, CheckCircle2, AlertTriangle, ShieldCheck, MessageSquare } from '@lucide/vue';
+import EmojiReactions from './EmojiReactions.vue';
 import { useAuth } from '@/composables/useAuth.js';
 import { renderMarkdown } from '@/utils/markdown.js';
 import { formatTime, isEdited } from '@/utils/date.js';

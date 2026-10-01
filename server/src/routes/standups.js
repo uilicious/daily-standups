@@ -1,4 +1,11 @@
-import { getUserById, getTodayStandupsForUser, saveStandup, getTeamById } from '../db/queries.js';
+import {
+  getUserById,
+  getTodayStandupsForUser,
+  saveStandup,
+  getTeamById,
+  getStandupById,
+  toggleReaction
+} from '../db/queries.js';
 
 export default async function standupRoutes(fastify, options) {
   // Authentication check helper
@@ -88,5 +95,36 @@ export default async function standupRoutes(fastify, options) {
       ok: true,
       standup: saved
     };
+  });
+
+  // Toggle emoji reaction on a standup
+  fastify.post('/:id/reactions', async (request, reply) => {
+    const user = await checkAuth(request, reply);
+    if (!user) return;
+
+    const { id } = request.params;
+    const standup = await getStandupById(Number(id));
+    if (!standup) {
+      return reply.code(404).send({ error: 'Standup not found' });
+    }
+
+    const isMember = (user.teams || []).some(t => t.id === standup.team_id);
+    if (!isMember && user.role !== 'admin') {
+      return reply.code(403).send({ error: 'You must be a team member to react to this standup' });
+    }
+
+    const { emoji } = request.body || {};
+    if (!emoji || typeof emoji !== 'string' || !emoji.trim()) {
+      return reply.code(400).send({ error: 'Emoji is required' });
+    }
+
+    const result = await toggleReaction({
+      userId: user.id,
+      targetType: 'standup',
+      targetId: standup.id,
+      emoji: emoji.trim()
+    });
+
+    return result;
   });
 }

@@ -286,6 +286,24 @@ export async function initDatabase() {
     });
   }
 
+  // 11. reactions table (emoji reactions on posts and standups)
+  const hasReactions = await db.schema.hasTable('reactions');
+  if (!hasReactions) {
+    await db.schema.createTable('reactions', (table) => {
+      table.increments('id').primary();
+      table.integer('user_id').unsigned().notNullable()
+        .references('id').inTable('users').onDelete('CASCADE');
+      table.string('target_type', 20).notNullable(); // 'post' | 'standup'
+      table.integer('target_id').unsigned().notNullable();
+      table.string('emoji', 32).notNullable();
+      table.timestamp('created_at').defaultTo(db.fn.now());
+
+      table.unique(['user_id', 'target_type', 'target_id', 'emoji']);
+      table.index(['target_type', 'target_id']);
+      table.index(['user_id']);
+    });
+  }
+
   await seedFromExternalFile();
   await ensureQuestionsForExistingTeams();
   await migrateLegacyStandupAnswers();

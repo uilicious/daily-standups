@@ -108,9 +108,9 @@ export default async function teamRoutes(fastify, options) {
     }
 
     const queryDate = date || new Date().toISOString().split('T')[0];
-    const standups = await getStandupsByTeamAndDate(team.id, queryDate);
+    const standups = await getStandupsByTeamAndDate(team.id, queryDate, user.id);
     const members = await getTeamMembersWithAvailability(team.id, queryDate);
-    const posts = await getPostsForTeamFeed(team.id, queryDate);
+    const posts = await getPostsForTeamFeed(team.id, queryDate, user.id);
     const orgWorkDays = await getOrgWorkDays();
 
     return {
