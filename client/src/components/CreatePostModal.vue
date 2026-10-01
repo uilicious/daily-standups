@@ -4,10 +4,10 @@
     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-fade-in"
   >
     <div
-      class="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-2xl overflow-hidden my-8 transform transition-all"
+      class="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-2xl my-8 transform transition-all"
     >
       <!-- Modal Header -->
-      <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+      <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-t-3xl">
         <div class="flex items-center space-x-3">
           <div
             class="p-2.5 rounded-2xl"

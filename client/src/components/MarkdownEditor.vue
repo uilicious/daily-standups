@@ -1,9 +1,9 @@
 <template>
   <div
-    class="rounded-xl border border-slate-200 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all bg-white overflow-hidden shadow-2xs"
+    class="rounded-xl border border-slate-200 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all bg-white shadow-2xs relative"
   >
     <!-- Editor Toolbar -->
-    <div class="flex items-center justify-between px-2.5 py-1.5 bg-slate-50/90 border-b border-slate-200/80 text-slate-600 select-none">
+    <div class="flex items-center justify-between px-2.5 py-1.5 bg-slate-50/90 border-b border-slate-200/80 text-slate-600 select-none rounded-t-xl">
       <!-- Formatting Buttons -->
       <div class="flex items-center space-x-1">
         <!-- Bold -->
@@ -106,15 +106,30 @@
         :placeholder="placeholder"
         :required="required"
         :rows="rows"
-        class="w-full px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none transition resize-y font-normal leading-relaxed block"
+        class="w-full px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none transition resize-y font-normal leading-relaxed block rounded-b-xl"
       ></textarea>
+    </div>
 
-      <!-- Mentions Autocomplete Popup -->
+    <!-- Preview (Preview mode) -->
+    <div
+      v-show="activeTab === 'preview'"
+      class="w-full px-4 py-3 min-h-[6.5rem] max-h-[16rem] overflow-y-auto text-sm markdown-content bg-white rounded-b-xl"
+    >
+      <div v-if="modelValue && modelValue.trim()" v-html="previewHtml"></div>
+      <p v-else class="text-slate-400 italic text-xs pt-2">
+        Nothing to preview yet. Switch back to "Write" to format your response with Markdown.
+      </p>
+    </div>
+
+    <!-- Mentions Autocomplete Popup (Teleported to body so it floats freely over everything without clipping) -->
+    <Teleport to="body">
       <div
         v-if="showMentionDropdown && filteredUsers.length > 0"
-        class="absolute left-3 bottom-full mb-1.5 z-50 w-72 max-h-56 overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200 divide-y divide-slate-100 py-1"
+        :style="dropdownStyle"
+        @mousedown.stop
+        class="max-h-56 overflow-y-auto bg-white rounded-xl shadow-2xl border border-slate-200 divide-y divide-slate-100 py-1"
       >
-        <div class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50/80">
+        <div class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50/80 sticky top-0 z-10 backdrop-blur-xs">
           Mention colleague
         </div>
         <button
@@ -147,23 +162,12 @@
           </div>
         </button>
       </div>
-    </div>
-
-    <!-- Preview (Preview mode) -->
-    <div
-      v-show="activeTab === 'preview'"
-      class="w-full px-4 py-3 min-h-[6.5rem] max-h-[16rem] overflow-y-auto text-sm markdown-content bg-white"
-    >
-      <div v-if="modelValue && modelValue.trim()" v-html="previewHtml"></div>
-      <p v-else class="text-slate-400 italic text-xs pt-2">
-        Nothing to preview yet. Switch back to "Write" to format your response with Markdown.
-      </p>
-    </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue';
+import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue';
 import { Bold, Italic, List, Code, Link, Eye, AtSign } from '@lucide/vue';
 import { renderMarkdown } from '@/utils/markdown.js';
 
@@ -200,6 +204,7 @@ const showMentionDropdown = ref(false);
 const mentionQuery = ref('');
 const mentionStartIndex = ref(-1);
 const selectedIndex = ref(0);
+const dropdownStyle = ref({});
 
 const filteredUsers = computed(() => {
   if (!props.mentionUsers || props.mentionUsers.length === 0) return [];
@@ -212,6 +217,60 @@ const filteredUsers = computed(() => {
       return username.includes(q) || name.includes(q);
     })
     .slice(0, 6);
+});
+
+function updateDropdownPosition() {
+  if (!textareaRef.value) return;
+  const rect = textareaRef.value.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) {
+    showMentionDropdown.value = false;
+    return;
+  }
+
+  const dropdownHeight = 224; // max-height 14rem = 224px
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const spaceAbove = rect.top;
+
+  let top;
+  // If tight on bottom (< 230px) and more space above, flip upwards
+  if (spaceBelow < dropdownHeight + 10 && spaceAbove > spaceBelow) {
+    top = Math.max(8, rect.top - dropdownHeight - 6);
+  } else {
+    top = rect.bottom + 6;
+  }
+
+  // Ensure dropdown stays nicely on screen horizontally
+  const left = Math.min(Math.max(8, rect.left + 12), window.innerWidth - 296);
+
+  dropdownStyle.value = {
+    position: 'fixed',
+    top: `${top}px`,
+    left: `${left}px`,
+    width: '288px',
+    zIndex: 99999
+  };
+}
+
+function onScrollOrResize() {
+  if (showMentionDropdown.value) {
+    updateDropdownPosition();
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('scroll', onScrollOrResize, { capture: true, passive: true });
+  window.addEventListener('resize', onScrollOrResize, { passive: true });
+});
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', onScrollOrResize, { capture: true });
+  window.removeEventListener('resize', onScrollOrResize);
+});
+
+watch(activeTab, (tab) => {
+  if (tab === 'preview') {
+    showMentionDropdown.value = false;
+  }
 });
 
 function handleInput(e) {
@@ -235,6 +294,9 @@ function checkMentionTrigger() {
     mentionStartIndex.value = cursorPos - match[1].length - 1;
     showMentionDropdown.value = true;
     selectedIndex.value = 0;
+    nextTick(() => {
+      updateDropdownPosition();
+    });
   } else {
     showMentionDropdown.value = false;
   }
