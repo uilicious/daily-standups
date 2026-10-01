@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-01
+
 ### Added
 - **@username Mentions & Badge Styling**: Added autocomplete dropdown to tag colleagues by `@username` in posts and standups, an `@` toolbar action, and styled mention badges for `@username` mentions across the feed.
 
 ### Fixed
+- **Mention Autocomplete**: Fixed dropdown clipping by floating over the editor, fixed arrow key navigation, and excluded the currently logged-in user from suggestion results.
 - **Standup Timestamps**: Fixed "Invalid Date" display on standup cards by adding a shared date utility (`parseDate`, `formatTime`, `isEdited`) supporting both PostgreSQL ISO strings and SQLite formats.
 - **Schedule Save Endpoint**: Updated working schedule endpoint to `/me/workdays` to resolve "API route not found" error when saving weekly schedules.
 
